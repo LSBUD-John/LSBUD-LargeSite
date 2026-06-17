@@ -2,23 +2,47 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Leaflet Working Test</title>
+  <title>Large Site Hex Selection</title>
 
   <!-- ✅ Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-
-  <!-- ✅ Leaflet JS -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
   <!-- ✅ Leaflet Draw CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
-
-  <!-- ✅ Leaflet Draw JS -->
-  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
 
   <style>
-    body { margin:0; }
-    #map { height:100vh; }
+    body { margin:0; font-family: Arial; }
+
+    #panel {
+      width:25%;
+      float:left;
+      padding:20px;
+      background:#f4f4f4;
+      height:100vh;
+      box-sizing:border-box;
+    }
+
+    #map {
+      width:75%;
+      height:100vh;
+      float:right;
+    }
+
+    input, select {
+      width:100%;
+      padding:8px;
+      margin-bottom:10px;
+    }
+
+    button {
+      width:100%;
+      padding:12px;
+      margin-top:10px;
+      background:black;
+      color:white;
+      border:none;
+      cursor:pointer;
+    }
 
     .leaflet-tile {
       filter: grayscale(100%) brightness(90%);
@@ -28,25 +52,54 @@
 
 <body>
 
+<div id="panel">
+  <h2>Search</h2>
+
+  <label>Buffer (line only)</label>
+  <select id="buffer">
+    <option value="25">25m</option>
+    <option value="50">50m</option>
+    <option value="75">75m</option>
+    <option value="100">100m</option>
+  </select>
+
+  <p style="font-size:12px;">
+    Polygon: click first point to close<br>
+    Line: double-click to finish
+  </p>
+
+  <h3>Result</h3>
+  <p>Tiles: <span id="tileCount">0</span></p>
+  <p>Quote: £<span id="quote">0</span></p>
+
+  <button onclick="clearAll()">Clear Selection</button>
+</div>
+
 <div id="map"></div>
+
+<!-- ✅ Scripts in CORRECT ORDER -->
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+<script src="https://unpkg.com/h3-js@3.7.2/dist/h3-js.umd.js"></script>
 
 <script>
 
-// ✅ This will FAIL if Leaflet not loaded (sanity check)
-console.log("Leaflet loaded:", typeof L !== "undefined");
-
-// ✅ Create map
+// ✅ Map
 const map = L.map('map').setView([52.48, -1.89], 13);
+map.doubleClickZoom.disable();
 
-// ✅ Add tiles
+// ✅ Tiles
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19,
+  maxZoom: 19
 }).addTo(map);
 
-// ✅ Drawing setup
+// ✅ Layers
 const drawnItems = new L.FeatureGroup();
 map.addLayer(drawnItems);
 
+// ✅ Draw control
 const drawControl = new L.Control.Draw({
   draw: {
     polygon: true,
@@ -55,22 +108,99 @@ const drawControl = new L.Control.Draw({
     circle: false,
     marker: false
   },
-  edit: {
-    featureGroup: drawnItems
-  }
+  edit: { featureGroup: drawnItems }
 });
 
 map.addControl(drawControl);
 
-// ✅ Handle draw
-map.on(L.Draw.Event.CREATED, function (e) {
+// ✅ Storage
+let selectedHexes = new Set();
+let hexLayers = [];
+
+// ✅ Pricing
+function calculatePrice(count){
+  let price = 2.99;
+  if(count > 50) price = 2.5;
+  if(count > 100) price = 2.0;
+  return (count * price).toFixed(0);
+}
+
+function updateUI(){
+  document.getElementById("tileCount").innerText = selectedHexes.size;
+  document.getElementById("quote").innerText = calculatePrice(selectedHexes.size);
+}
+
+// ✅ Clear
+function clearHexes(){
+  hexLayers.forEach(h => map.removeLayer(h));
+  hexLayers = [];
+  selectedHexes.clear();
+}
+
+function clearAll(){
+  drawnItems.clearLayers();
+  clearHexes();
+  updateUI();
+}
+
+// ✅ Draw hex
+function drawHex(hex){
+  const boundary = h3.h3ToGeoBoundary(hex, true);
+
+  return L.polygon(boundary.map(p => [p[0], p[1]]), {
+    color:"#1f4e79",
+    weight:1,
+    fillColor:"#4a90e2",
+    fillOpacity:0.5
+  }).addTo(map);
+}
+
+// ✅ Process geometry → hexes
+function processGeometry(geojson){
+
+  clearHexes();
+
+  const coords = geojson.geometry.coordinates;
+  const hexes = h3.polyfill(coords, 9);
+
+  hexes.forEach(h=>{
+    selectedHexes.add(h);
+    hexLayers.push(drawHex(h));
+  });
+
+  updateUI();
+}
+
+// ✅ Draw handler
+map.on(L.Draw.Event.CREATED, function(e){
 
   drawnItems.clearLayers();
-  drawnItems.addLayer(e.layer);
+  clearHexes();
 
-  console.log("✅ Shape created");
+  const layer = e.layer;
+  drawnItems.addLayer(layer);
 
-  // ✅ Force exit draw mode
+  let geojson;
+
+  if (e.layerType === "polygon") {
+    geojson = layer.toGeoJSON();
+  }
+
+  if (e.layerType === "polyline") {
+    const line = layer.toGeoJSON();
+    const buffer = parseFloat(document.getElementById("buffer").value);
+
+    geojson = turf.buffer(line, buffer, { units: 'meters' });
+
+    // show buffer
+    L.geoJSON(geojson, {
+      style: { color: "red", fillOpacity: 0.2 }
+    }).addTo(map);
+  }
+
+  processGeometry(geojson);
+
+  // ✅ CRITICAL: exit drawing mode
   drawControl._toolbars.draw.disable();
 });
 
@@ -78,4 +208,3 @@ map.on(L.Draw.Event.CREATED, function (e) {
 
 </body>
 </html>
-``
