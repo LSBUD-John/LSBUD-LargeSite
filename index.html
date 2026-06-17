@@ -2,13 +2,19 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Working Map</title>
+  <title>Leaflet Working Test</title>
 
   <!-- ✅ Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+  <!-- ✅ Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <!-- ✅ Leaflet Draw CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
+
+  <!-- ✅ Leaflet Draw JS -->
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 
   <style>
     body { margin:0; }
@@ -24,26 +30,20 @@
 
 <div id="map"></div>
 
-<!-- ✅ Leaflet JS (FIRST) -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-<!-- ✅ Leaflet Draw JS (SECOND) -->
-<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
-
 <script>
 
-// ✅ sanity check
-console.log("Leaflet available:", typeof L !== "undefined");
+// ✅ This will FAIL if Leaflet not loaded (sanity check)
+console.log("Leaflet loaded:", typeof L !== "undefined");
 
-// ✅ Map init
+// ✅ Create map
 const map = L.map('map').setView([52.48, -1.89], 13);
 
-// ✅ Tiles
+// ✅ Add tiles
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19
+  maxZoom: 19,
 }).addTo(map);
 
-// ✅ Draw setup
+// ✅ Drawing setup
 const drawnItems = new L.FeatureGroup();
 map.addLayer(drawnItems);
 
@@ -63,14 +63,14 @@ const drawControl = new L.Control.Draw({
 map.addControl(drawControl);
 
 // ✅ Handle draw
-map.on('draw:created', function(e) {
+map.on(L.Draw.Event.CREATED, function (e) {
 
   drawnItems.clearLayers();
   drawnItems.addLayer(e.layer);
 
-  console.log("✅ shape created");
+  console.log("✅ Shape created");
 
-  // ✅ FIX: exit draw mode
+  // ✅ Force exit draw mode
   drawControl._toolbars.draw.disable();
 });
 
@@ -78,3 +78,4 @@ map.on('draw:created', function(e) {
 
 </body>
 </html>
+``
