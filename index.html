@@ -3,17 +3,15 @@
 <head>
   <title>Hex Site Selection</title>
 
-  <!-- Leaflet -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leafletnpkg.com/leaflet/dist/leaft>
-
-  <!-- Leaflet Draw -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw/dist/leaflet.draw.css"/>
+  <!-- ✅ Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"com/leaflet/dist/leaflet.js<!-- ✅ Leaflet Draw -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw/dist/leaflet.draw.css" />
   <script src="https://unpkg.com/leaflet-draw/dist/leaflet.draw.js"></script>
 
-  <!-- Turf -->
+  <!-- ✅ Turf -->
   <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
 
-  <!-- H3 -->
+  <!-- ✅ H3 -->
   <script src="https://unpkg.com/h3-js@3.7.2/dist/h3-js.umd.js"></script>
 
   <style>
@@ -60,9 +58,7 @@
 <div id="panel">
   <h2>Search</h2>
 
-  <input placeholder="Address / What3Words"/>
-
-  <label>Buffer (line only)</label>
+  <label>Buffer</label>
   <select id="buffer">
     <option value="25">25m</option>
     <option value="50">50m</option>
@@ -71,7 +67,8 @@
   </select>
 
   <p style="font-size:12px;">
-    Draw polygon (click first point to close) or line (double-click to finish)
+    Polygon: click first point to close  
+    Line: double click to finish
   </p>
 
   <h3>Result</h3>
@@ -85,19 +82,20 @@
 
 <script>
 
+// ✅ Map
 let map = L.map('map').setView([52.48, -1.89], 14);
 map.doubleClickZoom.disable();
 
-// base map
+// ✅ Tiles
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19
 }).addTo(map);
 
-// layers
+// ✅ Drawing layer
 let drawnItems = new L.FeatureGroup();
 map.addLayer(drawnItems);
 
-// draw control
+// ✅ Draw controls
 let drawControl = new L.Control.Draw({
   draw: {
     polygon: true,
@@ -110,11 +108,11 @@ let drawControl = new L.Control.Draw({
 });
 map.addControl(drawControl);
 
-// storage
+// ✅ Data stores
 let selectedHexes = new Set();
 let hexLayers = [];
 
-// pricing
+// ✅ Pricing
 function calculatePrice(count){
   let price = 2.99;
   if(count > 50) price = 2.5;
@@ -127,6 +125,7 @@ function updateUI(){
   document.getElementById("quote").innerText = calculatePrice(selectedHexes.size);
 }
 
+// ✅ Clear
 function clearHexes(){
   hexLayers.forEach(h => map.removeLayer(h));
   hexLayers = [];
@@ -139,9 +138,10 @@ function clearAll(){
   updateUI();
 }
 
-// draw hex
+// ✅ Draw hex
 function drawHex(hex){
   const boundary = h3.h3ToGeoBoundary(hex, true);
+
   return L.polygon(boundary.map(p => [p[0], p[1]]), {
     color:"#1f4e79",
     weight:1,
@@ -150,15 +150,11 @@ function drawHex(hex){
   }).addTo(map);
 }
 
-// process geometry
+// ✅ Process
 function processGeometry(geojson){
-
   clearHexes();
 
-  const coords = geojson.geometry.coordinates;
-  const resolution = 9;
-
-  const hexes = h3.polyfill(coords, resolution);
+  const hexes = h3.polyfill(geojson.geometry.coordinates, 9);
 
   hexes.forEach(h=>{
     selectedHexes.add(h);
@@ -168,7 +164,7 @@ function processGeometry(geojson){
   updateUI();
 }
 
-// handle draw
+// ✅ Draw handler
 map.on(L.Draw.Event.CREATED, function(e){
 
   drawnItems.clearLayers();
@@ -189,15 +185,14 @@ map.on(L.Draw.Event.CREATED, function(e){
 
     geojson = turf.buffer(line, buffer, {units:'meters'});
 
-    // show buffer
     L.geoJSON(geojson, {
-      style:{ color:"#ff6666", fillOpacity:0.2 }
+      style:{ color:"red", fillOpacity:0.2 }
     }).addTo(map);
   }
 
   processGeometry(geojson);
 
-  // ✅ THIS FIXES YOUR PROBLEM
+  // ✅ CRITICAL FIX — EXIT DRAW MODE
   drawControl._toolbars.draw.disable();
 });
 
