@@ -5,27 +5,31 @@
   <title>Hex Site Selection</title>
 
   <!-- Leaflet -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-
-  <!-- Leaflet Draw -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
 
   <style>
-    body { margin:0; font-family: Arial; }
+    body {
+      margin:0;
+      font-family: Arial;
+    }
+
+    /* ✅ FLEX LAYOUT (fixes your issue) */
+    #container {
+      display: flex;
+      height: 100vh;
+    }
 
     #panel {
-      width:25%;
-      height:100vh;
-      float:left;
-      padding:20px;
-      background:#f4f4f4;
-      box-sizing:border-box;
+      width: 300px;
+      padding: 20px;
+      background: #f4f4f4;
+      box-sizing: border-box;
+      overflow-y: auto;
     }
 
     #map {
-      width:75%;
-      height:100vh;
-      float:right;
+      flex: 1;
     }
 
     input, select {
@@ -52,36 +56,40 @@
 
 <body>
 
-<!-- ✅ LEFT PANEL -->
-<div id="panel">
+<div id="container">
 
-  <h2>Search</h2>
+  <!-- ✅ PANEL -->
+  <div id="panel">
 
-  <label>Buffer (line only)</label>
-  <select id="buffer">
-    <option value="25">25m</option>
-    <option value="50">50m</option>
-    <option value="75">75m</option>
-    <option value="100">100m</option>
-  </select>
+    <h2>Search</h2>
 
-  <p style="font-size:12px;">
-    Polygon: click first point to close<br>
-    Line: double-click to finish
-  </p>
+    <label>Buffer (line only)</label>
+    <select id="buffer">
+      <option value="25">25m</option>
+      <option value="50">50m</option>
+      <option value="75">75m</option>
+      <option value="100">100m</option>
+    </select>
 
-  <h3>Result</h3>
-  <p>Tiles: <span id="tileCount">0</span></p>
-  <p>Quote: £<span id="quote">0</span></p>
+    <p style="font-size:12px;">
+      Polygon: click first point to close<br>
+      Line: double-click to finish
+    </p>
 
-  <button onclick="clearAll()">Clear Selection</button>
+    <h3>Result</h3>
+    <p>Tiles: <span id="tileCount">0</span></p>
+    <p>Quote: £<span id="quote">0</span></p>
+
+    <button onclick="clearAll()">Clear Selection</button>
+
+  </div>
+
+  <!-- ✅ MAP -->
+  <div id="map"></div>
 
 </div>
 
-<!-- ✅ MAP -->
-<div id="map"></div>
-
-<!-- ✅ Scripts IN CORRECT ORDER -->
+<!-- ✅ Scripts (correct order) -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
@@ -93,16 +101,15 @@
 const map = L.map('map').setView([52.48, -1.89], 13);
 map.doubleClickZoom.disable();
 
-// ✅ Tiles
+// ✅ Basemap
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19
 }).addTo(map);
 
-// ✅ Drawing layer
+// ✅ Drawing
 const drawnItems = new L.FeatureGroup();
 map.addLayer(drawnItems);
 
-// ✅ Draw control
 const drawControl = new L.Control.Draw({
   draw: {
     polygon: true,
@@ -157,7 +164,7 @@ function drawHex(hex){
   }).addTo(map);
 }
 
-// ✅ Process geometry → hexes
+// ✅ Process geometry
 function processGeometry(geojson){
 
   clearHexes();
@@ -172,7 +179,7 @@ function processGeometry(geojson){
   updateUI();
 }
 
-// ✅ Draw handler
+// ✅ DRAW HANDLER
 map.on('draw:created', function(e){
 
   drawnItems.clearLayers();
@@ -200,7 +207,7 @@ map.on('draw:created', function(e){
 
   processGeometry(geojson);
 
-  // ✅ Exit drawing mode (your earlier issue)
+  // ✅ Exit draw mode (critical fix)
   drawControl._toolbars.draw.disable();
 });
 
@@ -208,4 +215,3 @@ map.on('draw:created', function(e){
 
 </body>
 </html>
-``
