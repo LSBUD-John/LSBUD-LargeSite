@@ -5,8 +5,8 @@
   <title>Hex Site Selection</title>
 
   <!-- Leaflet -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
 
   <style>
     body {
@@ -14,22 +14,23 @@
       font-family: Arial;
     }
 
-    /* ✅ FLEX LAYOUT (fixes your issue) */
-    #container {
-      display: flex;
-      height: 100vh;
+    /* ✅ Map full screen */
+    #map {
+      height:100vh;
+      width:100%;
     }
 
+    /* ✅ FORCE panel ON TOP OF MAP */
     #panel {
+      position: absolute;
+      top: 20px;
+      left: 20px;
       width: 300px;
       padding: 20px;
-      background: #f4f4f4;
-      box-sizing: border-box;
-      overflow-y: auto;
-    }
-
-    #map {
-      flex: 1;
+      background: rgba(255,255,255,0.95);
+      z-index: 10000; /* 🔥 critical */
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+      border-radius: 8px;
     }
 
     input, select {
@@ -56,40 +57,36 @@
 
 <body>
 
-<div id="container">
+<!-- ✅ PANEL (now floats above map) -->
+<div id="panel">
 
-  <!-- ✅ PANEL -->
-  <div id="panel">
+  <h2>Search</h2>
 
-    <h2>Search</h2>
+  <label>Buffer (line only)</label>
+  <select id="buffer">
+    <option value="25">25m</option>
+    <option value="50">50m</option>
+    <option value="75">75m</option>
+    <option value="100">100m</option>
+  </select>
 
-    <label>Buffer (line only)</label>
-    <select id="buffer">
-      <option value="25">25m</option>
-      <option value="50">50m</option>
-      <option value="75">75m</option>
-      <option value="100">100m</option>
-    </select>
+  <p style="font-size:12px;">
+    Polygon: click first point to close<br>
+    Line: double-click to finish
+  </p>
 
-    <p style="font-size:12px;">
-      Polygon: click first point to close<br>
-      Line: double-click to finish
-    </p>
+  <h3>Result</h3>
+  <p>Tiles: <span id="tileCount">0</span></p>
+  <p>Quote: £<span id="quote">0</span></p>
 
-    <h3>Result</h3>
-    <p>Tiles: <span id="tileCount">0</span></p>
-    <p>Quote: £<span id="quote">0</span></p>
-
-    <button onclick="clearAll()">Clear Selection</button>
-
-  </div>
-
-  <!-- ✅ MAP -->
-  <div id="map"></div>
+  <button onclick="clearAll()">Clear Selection</button>
 
 </div>
 
-<!-- ✅ Scripts (correct order) -->
+<!-- ✅ MAP -->
+<div id="map"></div>
+
+<!-- ✅ Scripts -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
@@ -97,16 +94,16 @@
 
 <script>
 
-// ✅ Map
+// Map
 const map = L.map('map').setView([52.48, -1.89], 13);
 map.doubleClickZoom.disable();
 
-// ✅ Basemap
+// Tiles
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19
 }).addTo(map);
 
-// ✅ Drawing
+// Drawing
 const drawnItems = new L.FeatureGroup();
 map.addLayer(drawnItems);
 
@@ -123,16 +120,13 @@ const drawControl = new L.Control.Draw({
 
 map.addControl(drawControl);
 
-// ✅ Storage
+// Storage
 let selectedHexes = new Set();
 let hexLayers = [];
 
-// ✅ Pricing
+// Pricing
 function calculatePrice(count){
-  let price = 2.99;
-  if(count > 50) price = 2.5;
-  if(count > 100) price = 2.0;
-  return (count * price).toFixed(0);
+  return (count * 2.99).toFixed(0);
 }
 
 function updateUI(){
@@ -140,7 +134,7 @@ function updateUI(){
   document.getElementById("quote").innerText = calculatePrice(selectedHexes.size);
 }
 
-// ✅ Clear
+// Clear
 function clearHexes(){
   hexLayers.forEach(h => map.removeLayer(h));
   hexLayers = [];
@@ -153,22 +147,19 @@ function clearAll(){
   updateUI();
 }
 
-// ✅ Draw hex
+// Draw hex
 function drawHex(hex){
   const boundary = h3.h3ToGeoBoundary(hex, true);
   return L.polygon(boundary.map(p => [p[0], p[1]]), {
     color:"#1f4e79",
-    weight:1,
     fillColor:"#4a90e2",
     fillOpacity:0.5
   }).addTo(map);
 }
 
-// ✅ Process geometry
+// Process
 function processGeometry(geojson){
-
   clearHexes();
-
   const hexes = h3.polyfill(geojson.geometry.coordinates, 9);
 
   hexes.forEach(h=>{
@@ -179,7 +170,7 @@ function processGeometry(geojson){
   updateUI();
 }
 
-// ✅ DRAW HANDLER
+// Draw handler
 map.on('draw:created', function(e){
 
   drawnItems.clearLayers();
@@ -196,22 +187,15 @@ map.on('draw:created', function(e){
 
   if (e.layerType === "polyline") {
     const line = layer.toGeoJSON();
-    const buffer = parseFloat(document.getElementById("buffer").value);
-
-    geojson = turf.buffer(line, buffer, { units: 'meters' });
-
-    L.geoJSON(geojson, {
-      style: { color: "red", fillOpacity: 0.2 }
-    }).addTo(map);
+    geojson = turf.buffer(line, 50, { units: 'meters' });
   }
 
   processGeometry(geojson);
 
-  // ✅ Exit draw mode (critical fix)
   drawControl._toolbars.draw.disable();
 });
 
 </script>
 
 </body>
-</html>
+
