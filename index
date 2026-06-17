@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Hex Site Selection Demo</title>
+  <style>
+    body { margin:0; font-family: Arial; }
+    #map { height: 100vh; width: 75%; float:right; }
+    #panel {
+      width: 25%;
+      float:left;
+      padding: 20px;
+      box-sizing: border-box;
+      background:#f4f4f4;
+    }
+    select, input { width:100%; margin-bottom:10px; padding:8px; }
+    button {
+      padding:12px;
+      width:100%;
+      background:black;
+      color:white;
+      border:none;
+    }
+  </style>
+</head>
+
+<body>
+
+<div id="panel">
+  <h2>Search</h2>
+
+  <input placeholder="Address / What3Words"/>
+
+  <label>Buffer (line only)</label>
+  <select id="buffer">
+    <option value="25">25m</option>
+    <option value="50">50m</option>
+    <option value="75">75m</option>
+    <option value="100">100m</option>
+  </select>
+
+  <h3>Details</h3>
+  <select>
+    <option>Info Only</option>
+    <option>Planned</option>
+    <option>Emergency</option>
+  </select>
+
+  <input placeholder="Type of works"/>
+  <input placeholder="Planned date"/>
+  <input placeholder="Contact details"/>
+
+  <h3>Result</h3>
+  <p>Tiles: <span id="tileCount">0</span></p>
+  <p>Quote: £<span id="quote">0</span></p>
+
+  <button>Add to Basket</button>
+</div>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/h3-js"></script>
+<script src="https://unpkg.com/@turf/turf"></script>
+
+<script>
+let map;
+let drawingManager;
+let selectedHexes = new Set();
+let hexPolys = [];
+
+// pricing model
+function calculatePrice(count){
+  let price = 2.99;
+  if(count > 50) price = 2.5;
+  if(count > 100) price = 2.0;
+  return Math.round(count * price);
+}
+
+function updateUI(){
+  const count = selectedHexes.size;
+  document.getElementById("tileCount").innerText = count;
+  document.getElementById("quote").innerText = calculatePrice(count);
+}
+
+// draw hex on map
+function drawHex(hex){
+  const boundary = h3.h3ToGeoBoundary(hex, true);
+  return new google.maps.Polygon({
+    paths: boundary.map(([lat,lng])=>({lat,lng})),
+    strokeColor:"#3366cc",
+    fillColor:"#3366cc",
+    fillOpacity:0.3,
+    map: map
+  });
+}
+
+function clearHexes(){
+  hexPolys.forEach(p=>p.setMap(null));
+  hexPolys = [];
+  selectedHexes.clear();
+  updateUI();
+}
+
+function processGeometry(geojson){
+  clearHexes();
+
+  const resolution = 9;
+
+  const hexes = h3.polyfill(geojson.geometry.coordinates, resolution);
+
+  hexes.forEach(hex=>{
+    selectedHexes.add(hex);
+    hexPolys.push(drawHex(hex));
+  });
+
+  updateUI();
+}
+
+function initMap(){
+  map = new google.maps.Map(document.getElementById("map"), {
+    center: {lat:52.48, lng:-1.89},
+    zoom: 14
+  });
+
+  drawingManager = new google.maps.drawing.DrawingManager({
+    drawingMode: null,
+    drawingControl: true,
+    drawingControlOptions: {
+      drawingModes: ['polygon','polyline']
+    }
+  });
+
+  drawingManager.setMap(map);
+
+  google.maps.event.addListener(drawingManager, 'overlaycomplete', function(e){
+
+    let geojson;
+
+    if(e.type === 'polygon'){
+      const path = e.overlay.getPath().getArray().map(p=>[p.lng(), p.lat()]);
+      geojson = {
+        type:"Feature",
+        geometry:{
+          type:"Polygon",
+          coordinates:[path]
+        }
+      };
+    }
+
+    if(e.type === 'polyline'){
+      const path = e.overlay.getPath().getArray().map(p=>[p.lng(), p.lat()]);
+      const line = turf.lineString(path);
+
+      const bufferDistance = parseFloat(document.getElementById("buffer").value);
+
+      const buffered = turf.buffer(line, bufferDistance, {units:'meters'});
+
+      geojson = buffered;
+    }
+
+    processGeometry(geojson);
+  });
+}
+
+</script>
+
+<script async
+src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&libraries=drawing,geometry&callback=initMap">
+</script>
+
+</body>
+</html>
