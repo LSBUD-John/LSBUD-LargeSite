@@ -149,11 +149,16 @@ function clearAll(){
 
 // Draw hex
 function drawHex(hex){
-  const boundary = h3.h3ToGeoBoundary(hex, true);
-  return L.polygon(boundary.map(p => [p[0], p[1]]), {
+  const boundary = h3.h3ToGeoBoundary(hex, false);
+
+  const latlngs = boundary.map(coord => [coord[0], coord[1]]);
+
+  return L.polygon(latlngs, {
     color:"#1f4e79",
+    weight:1,
     fillColor:"#4a90e2",
-    fillOpacity:0.5
+    fillOpacity:0.5,
+    lineJoin: "round"
   }).addTo(map);
 }
 
