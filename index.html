@@ -2,20 +2,24 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Working Map Test</title>
+  <title>Leaflet Working Test</title>
 
-  <!-- ✅ Leaflet -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"com/leaflet/dist/leaft>
+  <!-- ✅ Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
-  <!-- ✅ Leaflet Draw -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw/dist/leaflet.draw.css" />
-  <script src="https://unpkg.com/leaflet-draw/dist/leaflet.draw.js"></script>
+  <!-- ✅ Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- ✅ Leaflet Draw CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
+
+  <!-- ✅ Leaflet Draw JS -->
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 
   <style>
     body { margin:0; }
-    #map { width:100%; height:100vh; }
+    #map { height:100vh; }
 
-    /* greyscale */
     .leaflet-tile {
       filter: grayscale(100%) brightness(90%);
     }
@@ -28,19 +32,21 @@
 
 <script>
 
+// ✅ This will FAIL if Leaflet not loaded (sanity check)
+console.log("Leaflet loaded:", typeof L !== "undefined");
+
 // ✅ Create map
 const map = L.map('map').setView([52.48, -1.89], 13);
 
-// ✅ Tiles
+// ✅ Add tiles
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19
+  maxZoom: 19,
 }).addTo(map);
 
-// ✅ Feature group
+// ✅ Drawing setup
 const drawnItems = new L.FeatureGroup();
 map.addLayer(drawnItems);
 
-// ✅ Draw control
 const drawControl = new L.Control.Draw({
   draw: {
     polygon: true,
@@ -53,17 +59,18 @@ const drawControl = new L.Control.Draw({
     featureGroup: drawnItems
   }
 });
+
 map.addControl(drawControl);
 
-// ✅ Handle drawing
-map.on('draw:created', function(e) {
+// ✅ Handle draw
+map.on(L.Draw.Event.CREATED, function (e) {
 
   drawnItems.clearLayers();
   drawnItems.addLayer(e.layer);
 
-  console.log("✅ shape created");
+  console.log("✅ Shape created");
 
-  // 🔥 critical fix
+  // ✅ Force exit draw mode
   drawControl._toolbars.draw.disable();
 });
 
