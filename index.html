@@ -127,8 +127,16 @@ map.addLayer(drawnItems);
 // Draw controls
 let drawControl = new L.Control.Draw({
   draw: {
-    polygon: true,
-    polyline: true,
+    polygon: {
+      allowIntersection: false,
+      showArea: true,
+      repeatMode: false
+    },
+    polyline: {
+      shapeOptions: {
+        color: '#0066ff'
+      }
+    },
     rectangle: false,
     circle: false,
     marker: false
@@ -138,6 +146,14 @@ let drawControl = new L.Control.Draw({
   }
 });
 map.addControl(drawControl);
+
+map.on('draw:drawstop', function () {
+  // If user exits drawing mode, ensure geometry is processed
+  if (drawnItems.getLayers().length > 0) {
+    const layer = drawnItems.getLayers()[0];
+    processLayer(layer);
+  }
+});
 
 // Storage
 let selectedHexes = new Set();
@@ -199,16 +215,41 @@ function processGeometry(geojson){
 
   updateUI();
 }
+function processLayer(layer){
 
+  let geojson;
+
+  if (layer instanceof L.Polygon) {
+    geojson = layer.toGeoJSON();
+  }
+
+  if (layer instanceof L.Polyline && !(layer instanceof L.Polygon)) {
+    const line = layer.toGeoJSON();
+    const bufferDistance = parseFloat(document.getElementById("buffer").value);
+
+    geojson = turf.buffer(line, bufferDistance, { units: 'meters' });
+
+    L.geoJSON(geojson, {
+      style: {
+        color: "#ff6666",
+        fillOpacity: 0.2
+      }
+    }).addTo(map);
+  }
+
+  processGeometry(geojson);
+}
 // ✅ Handle draw events
 map.on(L.Draw.Event.CREATED, function (e) {
 
   drawnItems.clearLayers();
+  clearHexes();
 
   let layer = e.layer;
   drawnItems.addLayer(layer);
 
-  let geojson;
+  processLayer(layer);
+});
 
   if (e.layerType === "polygon") {
     geojson = layer.toGeoJSON();
