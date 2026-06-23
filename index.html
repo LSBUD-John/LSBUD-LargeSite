@@ -16,7 +16,7 @@
     #panel {
       position:absolute;
       top:20px;
-      left:20px;
+      right:20px;
       width:300px;
       padding:20px;
       background:white;
@@ -125,12 +125,13 @@ map.on('draw:drawstop', function() {
   function drawHex(hex){
     const boundary = h3.h3ToGeoBoundary(hex, false);
 
-    L.polygon(boundary.map(p=>[p[0],p[1]]), {
-      color:"#1f4e79",
-      weight:0.5,
-      fillColor:"#4a90e2",
-      fillOpacity:0.35
-    }).addTo(hexGroup);
+    
+L.polygon(boundary.map(p=>[p[0],p[1]]), {
+  color:"#003366",
+  weight:1,
+  fillColor:"#4a90e2",
+  fillOpacity:0.6   // 🔥 stronger
+}).addTo(hexGroup);
   }
 
   function processGeometry(geojson){
@@ -154,7 +155,15 @@ map.on('draw:drawstop', function() {
     bufferGroup.clearLayers();
 
     const layer = e.layer;
-    drawnItems.addLayer(layer);
+    
+/ ✅ Apply style to drawn polygon
+layer.setStyle({
+  color: "#000000",
+  weight: 2,
+  fillOpacity: 0.1
+});
+
+drawnItems.addLayer(layer);
 
     let geojson;
 
@@ -167,7 +176,7 @@ map.on('draw:drawstop', function() {
       geojson = turf.buffer(line, 50, { units:'meters' });
 
       L.geoJSON(geojson, {
-        style:{ color:"red", fillOpacity:0.2 }
+        style:{ color:"red", weight: 2, fillOpacity:0.1 }
       }).addTo(bufferGroup);
     }
 
