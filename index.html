@@ -59,7 +59,7 @@
   <p>Tiles: <span id="tileCount">0</span></p>
   <p>Quote: £<span id="quote">0</span></p>
 
-  <button onclick="clearAll()">Clear Selection</button>
+  <button id="clearBtn">Clear Selection</button>
 </div>
 
 <div id="map"></div>
@@ -112,9 +112,9 @@ function updateUI(){
 }
 
 // ✅ Clear ALL (NOW FIXED)
+
 function clearAll(){
-  
-console.log("CLEAR CLICKED"); // ✅ debug check
+  console.log("CLEAR CLICKED ✅");
 
   drawnItems.clearLayers();
   hexGroup.clearLayers();
@@ -123,7 +123,7 @@ console.log("CLEAR CLICKED"); // ✅ debug check
 
   updateUI();
 }
-
+``
 
 // ✅ Draw hex
 function drawHex(hex){
@@ -194,3 +194,4 @@ map.on('draw:created', function(e){
 </body>
 </html>
 ``
+document.getElementById("clearBtn").addEventListener("click", clearAll);
