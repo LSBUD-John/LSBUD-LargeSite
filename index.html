@@ -17,19 +17,18 @@
     }
 
     #panel {
-      position: absolute;
-      top: 20px;
-      left: 20px;
-      width: 300px;
-      padding: 20px;
-      background: rgba(255,255,255,0.95);
-      z-index: 10000;     
-      box-shadow: 0 0 10px rgba(0,0,0,0.2);
-      border-radius: 8px;
-      pointer-events: auto;   /* ✅ CRITICAL FIX */
+      
+position: absolute;
+  top: 20px;
+  left: 20px;
+  width: 300px;
+  padding: 20px;
+  background: rgba(255,255,255,0.95);
+  z-index: 10000;
+  box-shadow: 0 0 10px rgba(0,0,0,0.2);
+  border-radius: 8px;
+  pointer-events: auto;
 }
-
-    }
 
     .leaflet-tile {
       filter: grayscale(100%) brightness(90%);
@@ -83,6 +82,7 @@ const map = L.map('map', {
   doubleClickZoom: false,
   attributionControl: true,
   zoomControl: true
+ }).setView([52.48, -1.89], 13);   // ✅ CRITICAL FIX 
 });
 
 // ✅ Basemap
