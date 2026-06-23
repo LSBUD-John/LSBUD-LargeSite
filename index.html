@@ -173,18 +173,19 @@ window.searchLocation = function(){
 }
 
 // ✅ HEX DRAW (always on top via direct map add)
-function drawHex(hex){
+function drawHex(hex){  
   const boundary = h3.h3ToGeoBoundary(hex, false);
 
   const hexLayer = L.polygon(boundary.map(p => [p[0], p[1]]), {
-    color:"#0050a0",
-    weight:0.7,
-    fillColor:"#4a90e2",
-    fillOpacity:0.6
+    color:"#002244",
+    weight: 1.2,           // ✅ stronger border
+    fillColor:"#0078d4",   // ✅ stronger blue
+    fillOpacity:0.7        // ✅ VERY visible
   }).addTo(map);
 
   hexLayers.push(hexLayer);
 }
+
 
 // ✅ PROCESS
 function processGeometry(geo){
@@ -218,10 +219,11 @@ map.on('draw:created', function(e){
 
   // ✅ BLUE SELECTION POLYGON
   layer.setStyle({
-    color: "#0078d4",
-    weight: 2,
-    fillColor:"#0078d4",
-    fillOpacity: 0.08
+  color: "#0078d4",
+  weight: 2,
+  fillColor:"#0078d4",
+  fillOpacity: 0.03
+
   });
 
   drawnItems.addLayer(layer);
