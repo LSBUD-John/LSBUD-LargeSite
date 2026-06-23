@@ -8,15 +8,8 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
 
-
-const hexGroup = L.layerGroup().addTo(map);
-const bufferGroup = L.layerGroup().addTo(map);
-  
   <style>
-    body {
-      margin:0;
-      font-family: Arial;
-    }
+    body { margin:0; font-family: Arial; }
 
     #map {
       height:100vh;
@@ -35,10 +28,8 @@ const bufferGroup = L.layerGroup().addTo(map);
       border-radius: 8px;
     }
 
-    input, select {
-      width:100%;
-      padding:8px;
-      margin-bottom:10px;
+    .leaflet-tile {
+      filter: grayscale(100%) brightness(90%);
     }
 
     button {
@@ -48,11 +39,6 @@ const bufferGroup = L.layerGroup().addTo(map);
       background:black;
       color:white;
       border:none;
-      cursor:pointer;
-    }
-
-    .leaflet-tile {
-      filter: grayscale(100%) brightness(90%);
     }
   </style>
 </head>
@@ -62,18 +48,12 @@ const bufferGroup = L.layerGroup().addTo(map);
 <div id="panel">
   <h2>Search</h2>
 
-  <label>Buffer (line only)</label>
   <select id="buffer">
     <option value="25">25m</option>
     <option value="50">50m</option>
     <option value="75">75m</option>
     <option value="100">100m</option>
   </select>
-
-  <p style="font-size:12px;">
-    Polygon: click first point to close<br>
-    Line: double-click to finish
-  </p>
 
   <h3>Result</h3>
   <p>Tiles: <span id="tileCount">0</span></p>
@@ -84,7 +64,7 @@ const bufferGroup = L.layerGroup().addTo(map);
 
 <div id="map"></div>
 
-<!-- JS LIBS (correct order) -->
+<!-- Scripts -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
@@ -92,20 +72,20 @@ const bufferGroup = L.layerGroup().addTo(map);
 
 <script>
 
-// ✅ Map init
+// ✅ Map
 const map = L.map('map').setView([52.48, -1.89], 13);
 map.doubleClickZoom.disable();
 
-// ✅ Base layer
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19
 }).addTo(map);
 
-// ✅ Drawing layer
-const drawnItems = new L.FeatureGroup();
-map.addLayer(drawnItems);
+// ✅ Layer groups (CORRECT PLACE)
+const drawnItems = new L.FeatureGroup().addTo(map);
+const hexGroup = L.layerGroup().addTo(map);
+const bufferGroup = L.layerGroup().addTo(map);
 
-// ✅ Draw control
+// ✅ Drawing tools
 const drawControl = new L.Control.Draw({
   draw: {
     polygon: true,
@@ -118,10 +98,10 @@ const drawControl = new L.Control.Draw({
 });
 map.addControl(drawControl);
 
-// ✅ Storage
+// ✅ Data
 let selectedHexes = new Set();
 
-// ✅ Pricing
+// ✅ UI
 function calculatePrice(count){
   return (count * 2.99).toFixed(0);
 }
@@ -131,60 +111,38 @@ function updateUI(){
   document.getElementById("quote").innerText = calculatePrice(selectedHexes.size);
 }
 
-// ✅ Clear hexes
-function clearHexes(){
-hexGroup.clearLayers(); // ✅ bulletproof
-  selectedHexes.clear();
-}
-
- bufferGroup.clearLayers();
-
-L.geoJSON(geojson, {
-  style: {
-    color: "red",
-    fillOpacity: 0.15,
-    weight: 2
-  }
-}).addTo(bufferGroup);
-
-// ✅ FULL CLEAR (FIXED)
+// ✅ Clear ALL (NOW FIXED)
 function clearAll(){
-drawnItems.clearLayers();
-  hexGroup.clearLayers();      // ✅ clears all hexes
-  bufferGroup.clearLayers();   // ✅ clears buffer
+  drawnItems.clearLayers();
+  hexGroup.clearLayers();
+  bufferGroup.clearLayers();
   selectedHexes.clear();
   updateUI();
 }
 
-  updateUI();
-}
-
-// ✅ Draw hex (IMPROVED VISUALS)
+// ✅ Draw hex
 function drawHex(hex){
   const boundary = h3.h3ToGeoBoundary(hex, false);
 
-  const latlngs = boundary.map(coord => [coord[0], coord[1]]);
-
-  return L.polygon(latlngs, {
+  return L.polygon(boundary.map(p => [p[0], p[1]]), {
     color:"#1f4e79",
     weight:0.5,
     fillColor:"#4a90e2",
-    fillOpacity:0.35,
-    lineJoin:"round",
-    smoothFactor:1
-  }).addTo(hexGroup); // ✅ key change
+    fillOpacity:0.35
+  }).addTo(hexGroup);
 }
 
 // ✅ Process geometry
 function processGeometry(geojson){
 
-  clearHexes();
+  hexGroup.clearLayers();
+  selectedHexes.clear();
 
   const hexes = h3.polyfill(geojson.geometry.coordinates, 9);
 
   hexes.forEach(h=>{
     selectedHexes.add(h);
-    hexLayers.push(drawHex(h));
+    drawHex(h);
   });
 
   updateUI();
@@ -194,12 +152,8 @@ function processGeometry(geojson){
 map.on('draw:created', function(e){
 
   drawnItems.clearLayers();
-  clearHexes();
-
-  if (bufferLayer) {
-    map.removeLayer(bufferLayer);
-    bufferLayer = null;
-  }
+  bufferGroup.clearLayers();
+  hexGroup.clearLayers();
 
   const layer = e.layer;
   drawnItems.addLayer(layer);
@@ -216,19 +170,17 @@ map.on('draw:created', function(e){
 
     geojson = turf.buffer(line, buffer, { units: 'meters' });
 
-    // ✅ track buffer layer
-    bufferLayer = L.geoJSON(geojson, {
+    L.geoJSON(geojson, {
       style: {
         color: "red",
         fillOpacity: 0.15,
         weight: 2
       }
-    }).addTo(map);
+    }).addTo(bufferGroup);
   }
 
   processGeometry(geojson);
 
-  // ✅ exit draw mode
   drawControl._toolbars.draw.disable();
 });
 
@@ -236,3 +188,4 @@ map.on('draw:created', function(e){
 
 </body>
 </html>
+``
