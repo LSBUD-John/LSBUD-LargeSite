@@ -162,7 +162,7 @@ window.searchLocation = function(){
 
   const query = document.getElementById("searchBox").value;
 
-  fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}`)
+ fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}`)
     .then(res => res.json())
     .then(data => {
 
@@ -186,8 +186,7 @@ function drawHex(hex){
     weight:0.8,
     fillColor:"#4a90e2",
     fillOpacity:0.55
-  }).addTo(hexGroup);
-  hexGroup.bringToFront();
+  }).addTo(hexGroup).bringToFront();
 }
 
 // ✅ Process
@@ -252,4 +251,4 @@ map.on('draw:created', function(e){
 
 </body>
 </html>
-``
+
