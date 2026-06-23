@@ -133,7 +133,6 @@ map.on('draw:drawstop', function() {
 
   function drawHex(hex){
     const boundary = h3.h3ToGeoBoundary(hex, false);
-
     
 L.polygon(boundary.map(p=>[p[0],p[1]]), {
   color:"#003366",
@@ -165,7 +164,7 @@ L.polygon(boundary.map(p=>[p[0],p[1]]), {
 
     const layer = e.layer;
     
-/ ✅ Apply style to drawn polygon
+// ✅ Apply style to drawn polygon
 layer.setStyle({
   color: "#000000",
   weight: 2,
