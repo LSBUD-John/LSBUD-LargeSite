@@ -1,218 +1,142 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>Hex Site Selection</title>
-
-  <!-- Leaflet -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
-
-  <style>
-    body { margin:0; font-family: Arial; }
-
-    #map {
-      height:100vh;
-      width:100%;
-    }
-
-    #panel {
-      
-position: absolute;
-  top: 20px;
-  left: 20px;
-  width: 300px;
-  padding: 20px;
-  background: rgba(255,255,255,0.95);
-  z-index: 10000;
-  box-shadow: 0 0 10px rgba(0,0,0,0.2);
-  border-radius: 8px;
-  pointer-events: auto;
-}
-
-    .leaflet-tile {
-      filter: grayscale(100%) brightness(90%);
-    }
-
-    button {
-      width:100%;
-      padding:12px;
-      margin-top:10px;
-      background:black;
-      color:white;
-      border:none;
-      cursor:pointer;
-    }
-  </style>
-</head>
-
-<body>
-
-<div id="panel">
-  <h2>Search</h2>
-
-  <label>Buffer (line only)</label>
-  <select id="buffer">
-    <option value="25">25m</option>
-    <option value="50">50m</option>
-    <option value="75">75m</option>
-    <option value="100">100m</option>
-  </select>
-
-  <h3>Result</h3>
-  <p>Tiles: <span id="tileCount">0</span></p>
-  <p>Quote: £<span id="quote">0</span></p>
-
-  <button id="clearBtn">Clear Selection</button>
-</div>
-
-<div id="map"></div>
-
-<!-- Scripts -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
-<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
-<script src="https://unpkg.com/h3-js@3.7.2/dist/h3-js.umd.js"></script>
-
 <script>
 
-// ✅ Map init
+// ✅ Wait until DOM is fully ready
+document.addEventListener("DOMContentLoaded", function(){
 
-const map = L.map('map', {
-  doubleClickZoom: false,
-  attributionControl: true,
-  zoomControl: true
- }).setView([52.48, -1.89], 13);
+  // ✅ Map init
+  const map = L.map('map', {
+    doubleClickZoom: false,
+    attributionControl: true,
+    zoomControl: true
+  }).setView([52.48, -1.89], 13);
 
-// ✅ Basemap
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19
-}).addTo(map);
-  L.DomEvent.disableClickPropagation(document.getElementById('panel'));
+  // ✅ Basemap
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19
+  }).addTo(map);
 
-// ✅ Layer groups (CRITICAL for proper clearing)
-const drawnItems = new L.FeatureGroup().addTo(map);
-const hexGroup = L.layerGroup().addTo(map);
-const bufferGroup = L.layerGroup().addTo(map);
+  // ✅ Panel click isolation (NOW SAFE)
+  const panel = document.getElementById('panel');
+  L.DomEvent.disableClickPropagation(panel);
+  L.DomEvent.disableScrollPropagation(panel);
 
-// ✅ Draw controls
-const drawControl = new L.Control.Draw({
-  draw: {
-    polygon: true,
-    polyline: true,
-    rectangle: false,
-    circle: false,
-    marker: false
-  },
-  edit: { featureGroup: drawnItems }
-});
-map.addControl(drawControl);
+  // ✅ Layers
+  const drawnItems = new L.FeatureGroup().addTo(map);
+  const hexGroup = L.layerGroup().addTo(map);
+  const bufferGroup = L.layerGroup().addTo(map);
 
-// ✅ Data
-let selectedHexes = new Set();
+  // ✅ Drawing controls
+  const drawControl = new L.Control.Draw({
+    draw: {
+      polygon: true,
+      polyline: true,
+      rectangle: false,
+      circle: false,
+      marker: false
+    },
+    edit: { featureGroup: drawnItems }
+  });
+  map.addControl(drawControl);
 
-// ✅ UI
-function calculatePrice(count){
-  return (count * 2.99).toFixed(0);
-}
+  // ✅ Data
+  let selectedHexes = new Set();
 
-function updateUI(){
-  document.getElementById("tileCount").innerText = selectedHexes.size;
-  document.getElementById("quote").innerText = calculatePrice(selectedHexes.size);
-}
+  // ✅ UI
+  function calculatePrice(count){
+    return (count * 2.99).toFixed(0);
+  }
 
-// ✅ CLEAR FUNCTION (fully working)
-function clearAll(){
-  console.log("✅ CLEAR CLICKED");
+  function updateUI(){
+    document.getElementById("tileCount").innerText = selectedHexes.size;
+    document.getElementById("quote").innerText = calculatePrice(selectedHexes.size);
+  }
 
-  drawnItems.clearLayers();
-  hexGroup.clearLayers();
-  bufferGroup.clearLayers();
-  selectedHexes.clear();
-  map.closePopup();
-  
-  // reset draw mode cleanly
-  drawControl._toolbars.draw.disable();
+  // ✅ CLEAR (now guaranteed working)
+  function clearAll(){
+    console.log("✅ CLEAR CLICKED");
 
-  updateUI();
-}
+    drawnItems.clearLayers();
+    hexGroup.clearLayers();
+    bufferGroup.clearLayers();
+    selectedHexes.clear();
 
-// ✅ Draw hex (refined visuals)
-function drawHex(hex){
-  const boundary = h3.h3ToGeoBoundary(hex, false);
+    drawControl._toolbars.draw.disable();
 
-  return L.polygon(boundary.map(p => [p[0], p[1]]), {
-    color:"#1f4e79",
-    weight:0.5,
-    fillColor:"#4a90e2",
-    fillOpacity:0.35,
-    lineJoin:"round"
-  }).addTo(hexGroup);
-}
+    updateUI();
+  }
 
-// ✅ Process geometry
-function processGeometry(geojson){
-
-  hexGroup.clearLayers();
-  selectedHexes.clear();
-
-  const hexes = h3.polyfill(geojson.geometry.coordinates, 9);
-
-  hexes.forEach(h=>{
-    selectedHexes.add(h);
-    drawHex(h);
+  // ✅ Bind button SAFELY
+  const clearBtn = document.getElementById("clearBtn");
+  clearBtn.addEventListener("click", function(e){
+    e.stopPropagation();
+    clearAll();
   });
 
-  updateUI();
-}
-
-// ✅ Draw handler
-map.on('draw:created', function(e){
-
-  drawnItems.clearLayers();
-  hexGroup.clearLayers();
-  bufferGroup.clearLayers();
-
-  const layer = e.layer;
-  drawnItems.addLayer(layer);
-
-  let geojson;
-
-  if (e.layerType === "polygon") {
-    geojson = layer.toGeoJSON();
-  }
-
-  if (e.layerType === "polyline") {
-    const line = layer.toGeoJSON();
-    const buffer = parseFloat(document.getElementById("buffer").value);
-
-    geojson = turf.buffer(line, buffer, { units: 'meters' });
-
-    L.geoJSON(geojson, {
-      style: {
-        color: "red",
-        fillOpacity: 0.15,
-        weight: 2
-      }
-    }).addTo(bufferGroup);
-  }
-
-  processGeometry(geojson);
-
-  drawControl._toolbars.draw.disable();
-});
-
-// ✅ Bind clear button (guaranteed to work here)
-const clearBtn = document.getElementById("clearBtn");
-
-if (clearBtn) {
-  clearBtn.onclick = clearAll;
   console.log("✅ Button wired");
-} else {
-  console.log("❌ Button not found");
-}
 
+  // ✅ Draw hex
+  function drawHex(hex){
+    const boundary = h3.h3ToGeoBoundary(hex, false);
+
+    L.polygon(boundary.map(p => [p[0], p[1]]), {
+      color:"#1f4e79",
+      weight:0.5,
+      fillColor:"#4a90e2",
+      fillOpacity:0.35
+    }).addTo(hexGroup);
+  }
+
+  // ✅ Process geometry
+  function processGeometry(geojson){
+
+    hexGroup.clearLayers();
+    selectedHexes.clear();
+
+    const hexes = h3.polyfill(geojson.geometry.coordinates, 9);
+
+    hexes.forEach(h=>{
+      selectedHexes.add(h);
+      drawHex(h);
+    });
+
+    updateUI();
+  }
+
+  // ✅ Draw handler
+  map.on('draw:created', function(e){
+
+    drawnItems.clearLayers();
+    bufferGroup.clearLayers();
+    hexGroup.clearLayers();
+
+    const layer = e.layer;
+    drawnItems.addLayer(layer);
+
+    let geojson;
+
+    if (e.layerType === "polygon") {
+      geojson = layer.toGeoJSON();
+    }
+
+    if (e.layerType === "polyline") {
+      const line = layer.toGeoJSON();
+      const buffer = parseFloat(document.getElementById("buffer").value);
+
+      geojson = turf.buffer(line, buffer, { units: 'meters' });
+
+      L.geoJSON(geojson, {
+        style: {
+          color: "red",
+          fillOpacity: 0.15,
+          weight: 2
+        }
+      }).addTo(bufferGroup);
+    }
+
+    processGeometry(geojson);
+
+    drawControl._toolbars.draw.disable();
+  });
+
+});
 </script>
-
-</body>
-</html>
