@@ -4,13 +4,14 @@
   <meta charset="utf-8" />
   <title>Hex Site Selection</title>
 
-  <!-- ✅ CORRECT CSS TAGS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/esheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.drawrgin:0; font-family: Arial; }
+  <!-- ✅ CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
 
-    #map {
-      height:100vh;
-      width:100%;
-    }
+  <style>
+    body { margin:0; font-family: Arial; }
+
+    #map { height:100vh; width:100%; }
 
     #panel {
       position:absolute;
@@ -34,6 +35,12 @@
       cursor:pointer;
     }
   </style>
+
+  <!-- ✅ ✅ CRITICAL: LOAD LIBRARIES WITH DEFER -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js" defer></script>
+  <script src="https://unpkg.com/@turf/turf@6/turf.min.js" defer></script>
+  <script src="https://unpkg.com/h3-js@3.7.2/dist/h3-js.umd.js" defer></script>
 </head>
 
 <body>
@@ -56,97 +63,59 @@
 
 <div id="map"></div>
 
-<!-- ✅ CORRECT SCRIPT TAGS (THIS FIXES YOUR ERROR) -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.jsript src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
-<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
-<script src="https://unpkg.com/h3-js@3.7.2/dist/h3-js.umd.js"></script>
+<!-- ✅ ✅ YOUR SCRIPT (NOW GUARANTEED TO RUN AFTER LIBRARIES) -->
+<script defer>
+document.addEventListener("DOMContentLoaded", function(){
 
-<script>
-console.log("✅ Script loaded correctly");
+  console.log("✅ Script running");
 
-// ✅ Map
-const map = L.map('map').setView([52.48, -1.89], 13);
+  // ✅ Map (NOW WILL WORK)
+  const map = L.map('map').setView([52.48, -1.89], 13);
 
-// ✅ Tiles
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19
-}).addTo(map);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19
+  }).addTo(map);
 
-// ✅ Layers
-const drawnItems = new L.FeatureGroup().addTo(map);
-const hexGroup = L.layerGroup().addTo(map);
-const bufferGroup = L.layerGroup().addTo(map);
+  const drawnItems = new L.FeatureGroup().addTo(map);
+  const hexGroup = L.layerGroup().addTo(map);
+  const bufferGroup = L.layerGroup().addTo(map);
 
-// ✅ Draw control
-const drawControl = new L.Control.Draw({
-  draw: {
-    polygon: true,
-    polyline: true,
-    rectangle: false,
-    circle: false,
-    marker: false
-  },
-  edit: { featureGroup: drawnItems }
-});
-map.addControl(drawControl);
+  const drawControl = new L.Control.Draw({
+    draw: {
+      polygon:true,
+      polyline:true,
+      rectangle:false,
+      circle:false,
+      marker:false
+    },
+    edit:{ featureGroup: drawnItems }
+  });
 
-// ✅ Data
-let selectedHexes = new Set();
+  map.addControl(drawControl);
 
-// ✅ UI
-function updateUI() {
-  document.getElementById("tileCount").innerText = selectedHexes.size;
-  document.getElementById("quote").innerText = (selectedHexes.size * 2.99).toFixed(0);
-}
+  let selectedHexes = new Set();
 
-// ✅ Clear
-function clearAll() {
-  console.log("✅ CLEAR CLICKED");
-
-  drawnItems.clearLayers();
-  hexGroup.clearLayers();
-  bufferGroup.clearLayers();
-  selectedHexes.clear();
-
-  updateUI();
-}
-
-// ✅ Button binding
-document.getElementById("clearBtn").addEventListener("click", clearAll);
-
-// ✅ Draw handler
-map.on('draw:created', function(e){
-
-  drawnItems.clearLayers();
-  hexGroup.clearLayers();
-  bufferGroup.clearLayers();
-  selectedHexes.clear();
-
-  const layer = e.layer;
-  drawnItems.addLayer(layer);
-
-  let geojson;
-
-  if (e.layerType === "polygon") {
-    geojson = layer.toGeoJSON();
+  function updateUI(){
+    document.getElementById("tileCount").innerText = selectedHexes.size;
+    document.getElementById("quote").innerText = (selectedHexes.size * 2.99).toFixed(0);
   }
 
-  if (e.layerType === "polyline") {
-    const line = layer.toGeoJSON();
-    geojson = turf.buffer(line, 50, { units:'meters' });
-
-    L.geoJSON(geojson, {
-      style:{ color:"red", fillOpacity:0.2 }
-    }).addTo(bufferGroup);
+  function clearAll(){
+    console.log("✅ CLEAR CLICKED");
+    drawnItems.clearLayers();
+    hexGroup.clearLayers();
+    bufferGroup.clearLayers();
+    selectedHexes.clear();
+    updateUI();
   }
 
-  // ✅ H3
-  const hexes = h3.polyfill(geojson.geometry.coordinates, 9);
+  document.getElementById("clearBtn")
+    .addEventListener("click", clearAll);
 
-  hexes.forEach(h=>{
-    selectedHexes.add(h);
+  console.log("✅ Button wired");
 
-    const boundary = h3.h3ToGeoBoundary(h, false);
+  function drawHex(hex){
+    const boundary = h3.h3ToGeoBoundary(hex, false);
 
     L.polygon(boundary.map(p=>[p[0],p[1]]), {
       color:"#1f4e79",
@@ -154,9 +123,48 @@ map.on('draw:created', function(e){
       fillColor:"#4a90e2",
       fillOpacity:0.35
     }).addTo(hexGroup);
-  });
+  }
 
-  updateUI();
+  function processGeometry(geojson){
+    hexGroup.clearLayers();
+    selectedHexes.clear();
+
+    const hexes = h3.polyfill(geojson.geometry.coordinates, 9);
+
+    hexes.forEach(h=>{
+      selectedHexes.add(h);
+      drawHex(h);
+    });
+
+    updateUI();
+  }
+
+  map.on('draw:created', function(e){
+
+    drawnItems.clearLayers();
+    hexGroup.clearLayers();
+    bufferGroup.clearLayers();
+
+    const layer = e.layer;
+    drawnItems.addLayer(layer);
+
+    let geojson;
+
+    if (e.layerType === "polygon") {
+      geojson = layer.toGeoJSON();
+    }
+
+    if (e.layerType === "polyline") {
+      const line = layer.toGeoJSON();
+      geojson = turf.buffer(line, 50, { units:'meters' });
+
+      L.geoJSON(geojson, {
+        style:{ color:"red", fillOpacity:0.2 }
+      }).addTo(bufferGroup);
+    }
+
+    processGeometry(geojson);
+  });
 
 });
 </script>
