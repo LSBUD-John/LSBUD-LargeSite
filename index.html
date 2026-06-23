@@ -234,17 +234,51 @@ map.on('draw:created', function(e){
   }
 
   if(e.layerType === "polyline"){
-    const bufferValue = parseFloat(document.getElementById("buffer").value);
+   if(e.layerType === "polyline"){
 
-    geo = turf.buffer(layer.toGeoJSON(), bufferValue, { units:'meters' });
+  const bufferValue = parseFloat(document.getElementById("buffer").value);
 
-    L.geoJSON(geo,{
-      style:{ color:"#0078d4", weight:2, fillOpacity:0.1 }
-    }).addTo(bufferGroup);
+  const buffered = turf.buffer(layer.toGeoJSON(), bufferValue, { units:'meters' });
+
+  // ✅ Draw visible buffer
+  L.geoJSON(buffered, {
+    style: {
+      color:"#0078d4",
+      weight:2,
+      fillOpacity:0.55
+    }
+  }).addTo(bufferGroup);
+
+  // ✅ Handle both Polygon and MultiPolygon properly
+  let coords;
+
+  if (buffered.geometry.type === "Polygon") {
+    coords = [buffered.geometry.coordinates];
   }
 
-  if(geo) processGeometry(geo);
-});
+  if (buffered.geometry.type === "MultiPolygon") {
+    coords = buffered.geometry.coordinates;
+  }
+
+  // ✅ Convert to lng/lat for H3
+  const poly = coords.map(polygon =>
+    polygon[0].map(c => [c[1], c[0]])
+  );
+
+  // ✅ Run H3
+  const hexes = h3.polyfill(poly, 9);
+
+  hexLayers.forEach(l => map.removeLayer(l));
+  hexLayers = [];
+  selectedHexes.clear();
+
+  hexes.forEach(h => {
+    selectedHexes.add(h);
+    drawHex(h);
+  });
+
+  updateUI();
+}
 
 });
 </script>
