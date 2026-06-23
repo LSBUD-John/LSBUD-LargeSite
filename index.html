@@ -2,14 +2,10 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Hex Demo - Clean Version</title>
+  <title>Hex Site Selection</title>
 
-  <!-- ✅ Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
-
-  <style>
-    body { margin:0; font-family: Arial; }
+  <!-- ✅ CORRECT CSS TAGS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/esheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.drawrgin:0; font-family: Arial; }
 
     #map {
       height:100vh;
@@ -20,17 +16,17 @@
       position:absolute;
       top:20px;
       left:20px;
-      width:280px;
-      padding:16px;
+      width:300px;
+      padding:20px;
       background:white;
       z-index:9999;
       border-radius:8px;
-      box-shadow:0 2px 10px rgba(0,0,0,0.2);
+      box-shadow:0 0 10px rgba(0,0,0,0.2);
     }
 
     button {
       width:100%;
-      padding:10px;
+      padding:12px;
       margin-top:10px;
       background:black;
       color:white;
@@ -43,34 +39,45 @@
 <body>
 
 <div id="panel">
-  <h3>Demo</h3>
+  <h3>Search</h3>
+
+  <select id="buffer">
+    <option value="25">25m</option>
+    <option value="50">50m</option>
+    <option value="75">75m</option>
+    <option value="100">100m</option>
+  </select>
+
   <p>Tiles: <span id="tileCount">0</span></p>
+  <p>Quote: £<span id="quote">0</span></p>
+
   <button id="clearBtn">Clear Selection</button>
 </div>
 
 <div id="map"></div>
 
-<!-- ✅ ✅ CRITICAL: Proper script tags -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<!-- ✅ CORRECT SCRIPT TAGS (THIS FIXES YOUR ERROR) -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.jsript src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+<script src="https://unpkg.com/h3-js@3.7.2/dist/h3-js.umd.js"></script>
 
 <script>
-console.log("✅ Script loaded");
+console.log("✅ Script loaded correctly");
 
-// ✅ Map must be defined AFTER Leaflet loads
+// ✅ Map
 const map = L.map('map').setView([52.48, -1.89], 13);
 
-// ✅ Add tiles
+// ✅ Tiles
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19
 }).addTo(map);
 
-// ✅ Simple layer group
-const testLayer = L.layerGroup().addTo(map);
-
-// ✅ Draw tools (minimal)
+// ✅ Layers
 const drawnItems = new L.FeatureGroup().addTo(map);
+const hexGroup = L.layerGroup().addTo(map);
+const bufferGroup = L.layerGroup().addTo(map);
 
+// ✅ Draw control
 const drawControl = new L.Control.Draw({
   draw: {
     polygon: true,
@@ -83,26 +90,75 @@ const drawControl = new L.Control.Draw({
 });
 map.addControl(drawControl);
 
-// ✅ Draw handler (basic test)
-map.on('draw:created', function(e) {
-  drawnItems.clearLayers();
-  drawnItems.addLayer(e.layer);
+// ✅ Data
+let selectedHexes = new Set();
 
-  console.log("✅ Shape drawn");
-});
+// ✅ UI
+function updateUI() {
+  document.getElementById("tileCount").innerText = selectedHexes.size;
+  document.getElementById("quote").innerText = (selectedHexes.size * 2.99).toFixed(0);
+}
 
-// ✅ CLEAR BUTTON (simple + guaranteed)
-document.getElementById("clearBtn").onclick = function() {
+// ✅ Clear
+function clearAll() {
   console.log("✅ CLEAR CLICKED");
 
   drawnItems.clearLayers();
-  testLayer.clearLayers();
+  hexGroup.clearLayers();
+  bufferGroup.clearLayers();
+  selectedHexes.clear();
 
-  document.getElementById("tileCount").innerText = 0;
-};
+  updateUI();
+}
 
-console.log("✅ Button wired");
+// ✅ Button binding
+document.getElementById("clearBtn").addEventListener("click", clearAll);
 
+// ✅ Draw handler
+map.on('draw:created', function(e){
+
+  drawnItems.clearLayers();
+  hexGroup.clearLayers();
+  bufferGroup.clearLayers();
+  selectedHexes.clear();
+
+  const layer = e.layer;
+  drawnItems.addLayer(layer);
+
+  let geojson;
+
+  if (e.layerType === "polygon") {
+    geojson = layer.toGeoJSON();
+  }
+
+  if (e.layerType === "polyline") {
+    const line = layer.toGeoJSON();
+    geojson = turf.buffer(line, 50, { units:'meters' });
+
+    L.geoJSON(geojson, {
+      style:{ color:"red", fillOpacity:0.2 }
+    }).addTo(bufferGroup);
+  }
+
+  // ✅ H3
+  const hexes = h3.polyfill(geojson.geometry.coordinates, 9);
+
+  hexes.forEach(h=>{
+    selectedHexes.add(h);
+
+    const boundary = h3.h3ToGeoBoundary(h, false);
+
+    L.polygon(boundary.map(p=>[p[0],p[1]]), {
+      color:"#1f4e79",
+      weight:0.5,
+      fillColor:"#4a90e2",
+      fillOpacity:0.35
+    }).addTo(hexGroup);
+  });
+
+  updateUI();
+
+});
 </script>
 
 </body>
