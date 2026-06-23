@@ -47,7 +47,7 @@ button {
 
 /* ✅ Lighter greyscale */
 .leaflet-tile-pane {
-  filter: grayscale(100%) brightness(92%);
+  filter: grayscale(85%) brightness(96%);
 }
 </style>
 
@@ -175,9 +175,9 @@ function drawHex(hex){
   const hexLayer = L.polygon(boundary.map(p => [p[0], p[1]]), {
     pane: 'hexPane',        // ✅ THIS IS THE KEY FIX
     color:"#002244",
-    weight:0.8,
+    weight:1,
     fillColor:"#0078d4",
-    fillOpacity:0.65
+    fillOpacity:0.5
   }).addTo(map);
 
   hexLayers.push(hexLayer);
@@ -218,7 +218,7 @@ map.on('draw:created', function(e){
     color: "#0078d4",
     weight: 2,
     fillColor:"#0078d4",
-    fillOpacity: 0.03
+    fillOpacity: 0.12
   });
 
   drawnItems.addLayer(layer);
@@ -230,9 +230,9 @@ map.on('draw:created', function(e){
   }
 
   if(e.layerType === "polyline"){
-    const bufferVal = parseFloat(buffer.value);
+    const bufferValue = parseFloat(document.getElementById("buffer").value);
 
-    geo = turf.buffer(layer.toGeoJSON(), bufferVal, { units:'meters' });
+    geo = turf.buffer(layer.toGeoJSON(), bufferValue, { units:'meters' });
 
     L.geoJSON(geo,{
       style:{ color:"#0078d4", weight:2, fillOpacity:0.1 }
