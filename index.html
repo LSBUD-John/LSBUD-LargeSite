@@ -8,6 +8,10 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
 
+
+const hexGroup = L.layerGroup().addTo(map);
+const bufferGroup = L.layerGroup().addTo(map);
+  
   <style>
     body {
       margin:0;
@@ -116,8 +120,6 @@ map.addControl(drawControl);
 
 // ✅ Storage
 let selectedHexes = new Set();
-let hexLayers = [];
-let bufferLayer = null; // ✅ NEW (fix clear issue)
 
 // ✅ Pricing
 function calculatePrice(count){
@@ -131,21 +133,28 @@ function updateUI(){
 
 // ✅ Clear hexes
 function clearHexes(){
-  hexLayers.forEach(h => map.removeLayer(h));
-  hexLayers = [];
+hexGroup.clearLayers(); // ✅ bulletproof
   selectedHexes.clear();
 }
 
+ bufferGroup.clearLayers();
+
+L.geoJSON(geojson, {
+  style: {
+    color: "red",
+    fillOpacity: 0.15,
+    weight: 2
+  }
+}).addTo(bufferGroup);
+
 // ✅ FULL CLEAR (FIXED)
 function clearAll(){
-
-  drawnItems.clearLayers();
-  clearHexes();
-
-  if (bufferLayer) {
-    map.removeLayer(bufferLayer);
-    bufferLayer = null;
-  }
+drawnItems.clearLayers();
+  hexGroup.clearLayers();      // ✅ clears all hexes
+  bufferGroup.clearLayers();   // ✅ clears buffer
+  selectedHexes.clear();
+  updateUI();
+}
 
   updateUI();
 }
@@ -158,12 +167,12 @@ function drawHex(hex){
 
   return L.polygon(latlngs, {
     color:"#1f4e79",
-    weight:0.5,              // thinner borders
+    weight:0.5,
     fillColor:"#4a90e2",
-    fillOpacity:0.35,        // softer fill
+    fillOpacity:0.35,
     lineJoin:"round",
     smoothFactor:1
-  }).addTo(map);
+  }).addTo(hexGroup); // ✅ key change
 }
 
 // ✅ Process geometry
