@@ -186,11 +186,15 @@ function drawHex(hex){
 // ✅ PROCESS
 function processGeometry(geo){
 
+  // clear previous
   hexLayers.forEach(l => map.removeLayer(l));
   hexLayers = [];
   selectedHexes.clear();
 
-  const hexes = h3.polyfill(geo.geometry.coordinates, 9);
+  // ✅ FIX: convert lat/lng → lng/lat
+  const coords = geo.geometry.coordinates[0].map(c => [c[1], c[0]]);
+
+  const hexes = h3.polyfill([coords], 9);
 
   hexes.forEach(h => {
     selectedHexes.add(h);
