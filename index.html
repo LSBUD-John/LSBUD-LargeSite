@@ -5,8 +5,8 @@
   <title>Hex Site Selection</title>
 
   <!-- Leaflet -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
 
   <style>
     body { margin:0; font-family: Arial; }
@@ -39,6 +39,7 @@
       background:black;
       color:white;
       border:none;
+      cursor:pointer;
     }
   </style>
 </head>
@@ -48,6 +49,7 @@
 <div id="panel">
   <h2>Search</h2>
 
+  <label>Buffer (line only)</label>
   <select id="buffer">
     <option value="25">25m</option>
     <option value="50">50m</option>
@@ -72,20 +74,21 @@
 
 <script>
 
-// ✅ Map
+// ✅ Map init
 const map = L.map('map').setView([52.48, -1.89], 13);
 map.doubleClickZoom.disable();
 
+// ✅ Basemap
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19
 }).addTo(map);
 
-// ✅ Layer groups (CORRECT PLACE)
+// ✅ Layer groups (CRITICAL for proper clearing)
 const drawnItems = new L.FeatureGroup().addTo(map);
 const hexGroup = L.layerGroup().addTo(map);
 const bufferGroup = L.layerGroup().addTo(map);
 
-// ✅ Drawing tools
+// ✅ Draw controls
 const drawControl = new L.Control.Draw({
   draw: {
     polygon: true,
@@ -111,20 +114,22 @@ function updateUI(){
   document.getElementById("quote").innerText = calculatePrice(selectedHexes.size);
 }
 
-// ✅ Clear ALL (NOW FIXED)
-
+// ✅ CLEAR FUNCTION (fully working)
 function clearAll(){
-  console.log("CLEAR CLICKED ✅");
+  console.log("✅ CLEAR CLICKED");
 
   drawnItems.clearLayers();
   hexGroup.clearLayers();
   bufferGroup.clearLayers();
   selectedHexes.clear();
 
+  // reset draw mode cleanly
+  drawControl._toolbars.draw.disable();
+
   updateUI();
 }
 
-// ✅ Draw hex
+// ✅ Draw hex (refined visuals)
 function drawHex(hex){
   const boundary = h3.h3ToGeoBoundary(hex, false);
 
@@ -132,7 +137,8 @@ function drawHex(hex){
     color:"#1f4e79",
     weight:0.5,
     fillColor:"#4a90e2",
-    fillOpacity:0.35
+    fillOpacity:0.35,
+    lineJoin:"round"
   }).addTo(hexGroup);
 }
 
@@ -156,8 +162,8 @@ function processGeometry(geojson){
 map.on('draw:created', function(e){
 
   drawnItems.clearLayers();
-  bufferGroup.clearLayers();
   hexGroup.clearLayers();
+  bufferGroup.clearLayers();
 
   const layer = e.layer;
   drawnItems.addLayer(layer);
@@ -188,12 +194,21 @@ map.on('draw:created', function(e){
   drawControl._toolbars.draw.disable();
 });
 
-  // ✅ Bind clear button 
-  document.getElementById("clearBtn").addEventListener("click", clearAll);
-  
+// ✅ SAFE BUTTON BINDING (this was your blocker)
+document.addEventListener("DOMContentLoaded", function(){
+
+  const btn = document.getElementById("clearBtn");
+
+  if (btn) {
+    btn.addEventListener("click", clearAll);
+    console.log("✅ Button wired correctly");
+  } else {
+    console.log("❌ Button NOT found");
+  }
+
+});
+
 </script>
 
 </body>
 </html>
-``
-
