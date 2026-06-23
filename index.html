@@ -14,13 +14,11 @@
       font-family: Arial;
     }
 
-    /* ✅ Map full screen */
     #map {
       height:100vh;
       width:100%;
     }
 
-    /* ✅ FORCE panel ON TOP OF MAP */
     #panel {
       position: absolute;
       top: 20px;
@@ -28,7 +26,7 @@
       width: 300px;
       padding: 20px;
       background: rgba(255,255,255,0.95);
-      z-index: 10000; /* 🔥 critical */
+      z-index: 10000;
       box-shadow: 0 0 10px rgba(0,0,0,0.2);
       border-radius: 8px;
     }
@@ -57,9 +55,7 @@
 
 <body>
 
-<!-- ✅ PANEL (now floats above map) -->
 <div id="panel">
-
   <h2>Search</h2>
 
   <label>Buffer (line only)</label>
@@ -80,13 +76,11 @@
   <p>Quote: £<span id="quote">0</span></p>
 
   <button onclick="clearAll()">Clear Selection</button>
-
 </div>
 
-<!-- ✅ MAP -->
 <div id="map"></div>
 
-<!-- ✅ Scripts -->
+<!-- JS LIBS (correct order) -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
@@ -94,19 +88,20 @@
 
 <script>
 
-// Map
+// ✅ Map init
 const map = L.map('map').setView([52.48, -1.89], 13);
 map.doubleClickZoom.disable();
 
-// Tiles
+// ✅ Base layer
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19
 }).addTo(map);
 
-// Drawing
+// ✅ Drawing layer
 const drawnItems = new L.FeatureGroup();
 map.addLayer(drawnItems);
 
+// ✅ Draw control
 const drawControl = new L.Control.Draw({
   draw: {
     polygon: true,
@@ -117,14 +112,14 @@ const drawControl = new L.Control.Draw({
   },
   edit: { featureGroup: drawnItems }
 });
-
 map.addControl(drawControl);
 
-// Storage
+// ✅ Storage
 let selectedHexes = new Set();
 let hexLayers = [];
+let bufferLayer = null; // ✅ NEW (fix clear issue)
 
-// Pricing
+// ✅ Pricing
 function calculatePrice(count){
   return (count * 2.99).toFixed(0);
 }
@@ -134,20 +129,28 @@ function updateUI(){
   document.getElementById("quote").innerText = calculatePrice(selectedHexes.size);
 }
 
-// Clear
+// ✅ Clear hexes
 function clearHexes(){
   hexLayers.forEach(h => map.removeLayer(h));
   hexLayers = [];
   selectedHexes.clear();
 }
 
+// ✅ FULL CLEAR (FIXED)
 function clearAll(){
+
   drawnItems.clearLayers();
   clearHexes();
+
+  if (bufferLayer) {
+    map.removeLayer(bufferLayer);
+    bufferLayer = null;
+  }
+
   updateUI();
 }
 
-// Draw hex
+// ✅ Draw hex (IMPROVED VISUALS)
 function drawHex(hex){
   const boundary = h3.h3ToGeoBoundary(hex, false);
 
@@ -155,16 +158,19 @@ function drawHex(hex){
 
   return L.polygon(latlngs, {
     color:"#1f4e79",
-    weight:0.5,
+    weight:0.5,              // thinner borders
     fillColor:"#4a90e2",
-    fillOpacity:0.4,
-    lineJoin: "round"
+    fillOpacity:0.35,        // softer fill
+    lineJoin:"round",
+    smoothFactor:1
   }).addTo(map);
 }
 
-// Process
+// ✅ Process geometry
 function processGeometry(geojson){
+
   clearHexes();
+
   const hexes = h3.polyfill(geojson.geometry.coordinates, 9);
 
   hexes.forEach(h=>{
@@ -175,11 +181,16 @@ function processGeometry(geojson){
   updateUI();
 }
 
-// Draw handler
+// ✅ Draw handler
 map.on('draw:created', function(e){
 
   drawnItems.clearLayers();
   clearHexes();
+
+  if (bufferLayer) {
+    map.removeLayer(bufferLayer);
+    bufferLayer = null;
+  }
 
   const layer = e.layer;
   drawnItems.addLayer(layer);
@@ -192,14 +203,27 @@ map.on('draw:created', function(e){
 
   if (e.layerType === "polyline") {
     const line = layer.toGeoJSON();
-    geojson = turf.buffer(line, 50, { units: 'meters' });
+    const buffer = parseFloat(document.getElementById("buffer").value);
+
+    geojson = turf.buffer(line, buffer, { units: 'meters' });
+
+    // ✅ track buffer layer
+    bufferLayer = L.geoJSON(geojson, {
+      style: {
+        color: "red",
+        fillOpacity: 0.15,
+        weight: 2
+      }
+    }).addTo(map);
   }
 
   processGeometry(geojson);
 
+  // ✅ exit draw mode
   drawControl._toolbars.draw.disable();
 });
 
 </script>
-</body>
 
+</body>
+</html>
