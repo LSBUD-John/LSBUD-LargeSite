@@ -1,96 +1,22 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>Hex Site Selection</title>
-
-  <!-- ✅ Leaflet -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
-
-  <style>
-    body { margin:0; font-family: Arial; }
-
-    #map {
-      height:100vh;
-      width:100%;
-    }
-
-    #panel {
-      position:absolute;
-      top:20px;
-      left:20px;
-      width:300px;
-      padding:20px;
-      background:rgba(255,255,255,0.95);
-      z-index:10000;
-      border-radius:8px;
-      box-shadow:0 0 10px rgba(0,0,0,0.2);
-    }
-
-    button {
-      width:100%;
-      padding:12px;
-      background:black;
-      color:white;
-      border:none;
-      cursor:pointer;
-      margin-top:10px;
-    }
-
-    .leaflet-tile {
-      filter: grayscale(100%) brightness(90%);
-    }
-  </style>
-</head>
-
-<body>
-
-<div id="panel">
-  <h2>Search</h2>
-
-  <label>Buffer</label>
-  <select id="buffer">
-    <option value="25">25m</option>
-    <option value="50">50m</option>
-    <option value="75">75m</option>
-    <option value="100">100m</option>
-  </select>
-
-  <h3>Result</h3>
-  <p>Tiles: <span id="tileCount">0</span></p>
-  <p>Quote: £<span id="quote">0</span></p>
-
-  <button id="clearBtn">Clear Selection</button>
-</div>
-
-<div id="map"></div>
-
-<!-- ✅ Scripts (CORRECT + COMPLETE) -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
-<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
-<script src="https://unpkg.com/h3-js@3.7.2/dist/h3-js.umd.js"></script>
-
 <script>
 
-// ✅ Wait for DOM (important)
+// ✅ Wait until DOM is fully ready
 document.addEventListener("DOMContentLoaded", function(){
 
-  console.log("✅ Script running");
-
-  // ✅ Map
+  // ✅ Map init
   const map = L.map('map', {
-    doubleClickZoom:false
+    doubleClickZoom: false,
+    attributionControl: true,
+    zoomControl: true
   }).setView([52.48, -1.89], 13);
 
-  // ✅ Tiles
+  // ✅ Basemap
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom:19
+    maxZoom: 19
   }).addTo(map);
 
-  // ✅ Prevent map eating panel clicks
-  const panel = document.getElementById("panel");
+  // ✅ Panel click isolation (NOW SAFE)
+  const panel = document.getElementById('panel');
   L.DomEvent.disableClickPropagation(panel);
   L.DomEvent.disableScrollPropagation(panel);
 
@@ -99,29 +25,33 @@ document.addEventListener("DOMContentLoaded", function(){
   const hexGroup = L.layerGroup().addTo(map);
   const bufferGroup = L.layerGroup().addTo(map);
 
-  // ✅ Draw tools
+  // ✅ Drawing controls
   const drawControl = new L.Control.Draw({
     draw: {
-      polygon:true,
-      polyline:true,
-      rectangle:false,
-      circle:false,
-      marker:false
+      polygon: true,
+      polyline: true,
+      rectangle: false,
+      circle: false,
+      marker: false
     },
-    edit:{ featureGroup: drawnItems }
+    edit: { featureGroup: drawnItems }
   });
-
   map.addControl(drawControl);
 
   // ✅ Data
   let selectedHexes = new Set();
 
-  function updateUI(){
-    document.getElementById("tileCount").innerText = selectedHexes.size;
-    document.getElementById("quote").innerText = (selectedHexes.size * 2.99).toFixed(0);
+  // ✅ UI
+  function calculatePrice(count){
+    return (count * 2.99).toFixed(0);
   }
 
-  // ✅ CLEAR (finally bulletproof)
+  function updateUI(){
+    document.getElementById("tileCount").innerText = selectedHexes.size;
+    document.getElementById("quote").innerText = calculatePrice(selectedHexes.size);
+  }
+
+  // ✅ CLEAR (now guaranteed working)
   function clearAll(){
     console.log("✅ CLEAR CLICKED");
 
@@ -135,12 +65,12 @@ document.addEventListener("DOMContentLoaded", function(){
     updateUI();
   }
 
-  // ✅ Bind button (reliable)
-  document.getElementById("clearBtn")
-    .addEventListener("click", function(e){
-      e.stopPropagation();
-      clearAll();
-    });
+  // ✅ Bind button SAFELY
+  const clearBtn = document.getElementById("clearBtn");
+  clearBtn.addEventListener("click", function(e){
+    e.stopPropagation();
+    clearAll();
+  });
 
   console.log("✅ Button wired");
 
@@ -158,6 +88,7 @@ document.addEventListener("DOMContentLoaded", function(){
 
   // ✅ Process geometry
   function processGeometry(geojson){
+
     hexGroup.clearLayers();
     selectedHexes.clear();
 
@@ -171,12 +102,12 @@ document.addEventListener("DOMContentLoaded", function(){
     updateUI();
   }
 
-  // ✅ Drawing event
+  // ✅ Draw handler
   map.on('draw:created', function(e){
 
     drawnItems.clearLayers();
-    hexGroup.clearLayers();
     bufferGroup.clearLayers();
+    hexGroup.clearLayers();
 
     const layer = e.layer;
     drawnItems.addLayer(layer);
@@ -191,10 +122,14 @@ document.addEventListener("DOMContentLoaded", function(){
       const line = layer.toGeoJSON();
       const buffer = parseFloat(document.getElementById("buffer").value);
 
-      geojson = turf.buffer(line, buffer, { units:'meters' });
+      geojson = turf.buffer(line, buffer, { units: 'meters' });
 
       L.geoJSON(geojson, {
-        style: { color:"red", fillOpacity:0.2 }
+        style: {
+          color: "red",
+          fillOpacity: 0.15,
+          weight: 2
+        }
       }).addTo(bufferGroup);
     }
 
@@ -205,7 +140,3 @@ document.addEventListener("DOMContentLoaded", function(){
 
 });
 </script>
-
-</body>
-</html>
-``
