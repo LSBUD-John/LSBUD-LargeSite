@@ -122,7 +122,8 @@ function clearAll(){
   hexGroup.clearLayers();
   bufferGroup.clearLayers();
   selectedHexes.clear();
-
+  map.closePopup();
+  
   // reset draw mode cleanly
   drawControl._toolbars.draw.disable();
 
@@ -194,19 +195,15 @@ map.on('draw:created', function(e){
   drawControl._toolbars.draw.disable();
 });
 
-// ✅ SAFE BUTTON BINDING (this was your blocker)
-document.addEventListener("DOMContentLoaded", function(){
+// ✅ Bind clear button (guaranteed to work here)
+const clearBtn = document.getElementById("clearBtn");
 
-  const btn = document.getElementById("clearBtn");
-
-  if (btn) {
-    btn.addEventListener("click", clearAll);
-    console.log("✅ Button wired correctly");
-  } else {
-    console.log("❌ Button NOT found");
-  }
-
-});
+if (clearBtn) {
+  clearBtn.onclick = clearAll;
+  console.log("✅ Button wired");
+} else {
+  console.log("❌ Button not found");
+}
 
 </script>
 
