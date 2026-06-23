@@ -113,12 +113,17 @@ function updateUI(){
 
 // ✅ Clear ALL (NOW FIXED)
 function clearAll(){
+  
+console.log("CLEAR CLICKED"); // ✅ debug check
+
   drawnItems.clearLayers();
   hexGroup.clearLayers();
   bufferGroup.clearLayers();
   selectedHexes.clear();
+
   updateUI();
 }
+
 
 // ✅ Draw hex
 function drawHex(hex){
