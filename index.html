@@ -11,7 +11,6 @@
 body { margin:0; font-family: Arial; }
 #map { height:100vh; width:100%; }
 
-/* Panel */
 #panel {
   position:absolute;
   top:20px;
@@ -34,7 +33,6 @@ input, select {
   box-sizing:border-box;
 }
 
-/* ✅ Blue buttons */
 button {
   width:100%;
   padding:10px;
@@ -47,9 +45,9 @@ button {
   border-radius:4px;
 }
 
-/* Greyscale map */
+/* ✅ Lighter greyscale */
 .leaflet-tile-pane {
-  filter: grayscale(100%) brightness(80%);
+  filter: grayscale(100%) brightness(92%);
 }
 </style>
 
@@ -95,13 +93,17 @@ document.addEventListener("DOMContentLoaded", function(){
 // ✅ MAP
 const map = L.map('map').setView([52.48, -1.89], 13);
 
-// ✅ BASEMAP + COPYRIGHT
+// ✅ CREATE HEX PANE (THIS FIXES EVERYTHING)
+map.createPane('hexPane');
+map.getPane('hexPane').style.zIndex = 650;
+
+// ✅ BASEMAP
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19,
   attribution: '&copy; OpenStreetMap contributors | LSBUD'
 }).addTo(map);
 
-// ✅ PANEL FIX
+// ✅ PANEL INTERACTION
 const panel = document.getElementById("panel");
 L.DomEvent.disableClickPropagation(panel);
 L.DomEvent.disableScrollPropagation(panel);
@@ -110,7 +112,7 @@ L.DomEvent.disableScrollPropagation(panel);
 const drawnItems = new L.FeatureGroup().addTo(map);
 const bufferGroup = L.layerGroup().addTo(map);
 
-// ✅ DRAW TOOL (no edit/delete)
+// ✅ DRAW TOOL
 const drawControl = new L.Control.Draw({
   draw: {
     polygon:true,
@@ -155,37 +157,31 @@ clearBtn.onclick = clearAll;
 
 // ✅ SEARCH
 window.searchLocation = function(){
-
   const query = searchBox.value;
 
   fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}`)
     .then(res => res.json())
     .then(data => {
-
       if(!data.length) return;
-
-      const lat = parseFloat(data[0].lat);
-      const lon = parseFloat(data[0].lon);
-
-      map.setView([lat, lon], 15);
-      L.marker([lat, lon]).addTo(map);
+      map.setView([data[0].lat, data[0].lon], 15);
+      L.marker([data[0].lat, data[0].lon]).addTo(map);
     });
 }
 
-// ✅ HEX DRAW (always on top via direct map add)
-function drawHex(hex){  
+// ✅ DRAW HEX — ALWAYS ON TOP
+function drawHex(hex){
   const boundary = h3.h3ToGeoBoundary(hex, false);
 
   const hexLayer = L.polygon(boundary.map(p => [p[0], p[1]]), {
+    pane: 'hexPane',        // ✅ THIS IS THE KEY FIX
     color:"#002244",
-    weight: 1.2,           // ✅ stronger border
-    fillColor:"#0078d4",   // ✅ stronger blue
-    fillOpacity:0.7        // ✅ VERY visible
+    weight:0.8,
+    fillColor:"#0078d4",
+    fillOpacity:0.65
   }).addTo(map);
 
   hexLayers.push(hexLayer);
 }
-
 
 // ✅ PROCESS
 function processGeometry(geo){
@@ -204,7 +200,7 @@ function processGeometry(geo){
   updateUI();
 }
 
-// ✅ DRAW BEHAVIOUR (show buffer only for lines)
+// ✅ BUFFER UI CONTROL
 map.on('draw:drawstart', function(e){
   bufferSection.style.display = (e.layerType === "polyline") ? "block" : "none";
 });
@@ -217,13 +213,12 @@ map.on('draw:created', function(e){
 
   const layer = e.layer;
 
-  // ✅ BLUE SELECTION POLYGON
+  // ✅ BLUE SITE AREA
   layer.setStyle({
-  color: "#0078d4",
-  weight: 2,
-  fillColor:"#0078d4",
-  fillOpacity: 0.03
-
+    color: "#0078d4",
+    weight: 2,
+    fillColor:"#0078d4",
+    fillOpacity: 0.03
   });
 
   drawnItems.addLayer(layer);
@@ -235,9 +230,9 @@ map.on('draw:created', function(e){
   }
 
   if(e.layerType === "polyline"){
-    const buffer = parseFloat(buffer.value);
+    const bufferVal = parseFloat(buffer.value);
 
-    geo = turf.buffer(layer.toGeoJSON(), buffer, { units:'meters' });
+    geo = turf.buffer(layer.toGeoJSON(), bufferVal, { units:'meters' });
 
     L.geoJSON(geo,{
       style:{ color:"#0078d4", weight:2, fillOpacity:0.1 }
