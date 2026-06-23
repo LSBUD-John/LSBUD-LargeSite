@@ -1,78 +1,88 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8" />
-  <title>Hex Site Selection</title>
+<meta charset="utf-8" />
+<title>Hex Site Selection</title>
 
-  <!-- ✅ CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
 
-  <style>
-    body { margin:0; font-family: Arial; }
+<style>
+body { margin:0; font-family: Arial; }
 
-    #map { height:100vh; width:100%; }
+#map { height:100vh; width:100%; }
 
-    #panel {
-      position:absolute;
-      top:20px;
-      right:20px;
-      width:300px;
-      padding:20px;
-      background:white;
-      z-index:9999;
-      border-radius:8px;
-      box-shadow:0 0 10px rgba(0,0,0,0.2);
-    }
+#panel {
+  position:absolute;
+  top:20px;
+  right:20px;
+  width:300px;
+  padding:20px;
+  background:white;
+  z-index:9999;
+  border-radius:8px;
+  box-shadow:0 0 10px rgba(0,0,0,0.2);
+}
 
-    button {
-      width:100%;
-      padding:12px;
-      margin-top:10px;
-      background:black;
-      color:white;
-      border:none;
-      cursor:pointer;
-    }
-  </style>
+button {
+  width:100%;
+  padding:10px;
+  margin-top:10px;
+  background:black;
+  color:white;
+  border:none;
+  cursor:pointer;
+}
 
-  <!-- ✅ ✅ CRITICAL: LOAD LIBRARIES WITH DEFER -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
-  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js" defer></script>
-  <script src="https://unpkg.com/@turf/turf@6/turf.min.js" defer></script>
-  <script src="https://unpkg.com/h3-js@3.7.2/dist/h3-js.umd.js" defer></script>
+input {
+  width:100%;
+  padding:8px;
+  margin-bottom:10px;
+}
+
+/* ✅ Greyscale map */
+.leaflet-tile {
+  filter: grayscale(100%) brightness(90%);
+}
+</style>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js" defer></script>
+<script src="https://unpkg.com/@turf/turf@6/turf.min.js" defer></script>
+<script src="https://unpkg.com/h3-js@3.7.2/dist/h3-js.umd.js" defer></script>
 </head>
 
 <body>
 
 <div id="panel">
-  <h3>Search</h3>
+<h3>Search</h3>
 
-  <select id="buffer">
-    <option value="25">25m</option>
-    <option value="50">50m</option>
-    <option value="75">75m</option>
-    <option value="100">100m</option>
-  </select>
+<input id="searchBox" placeholder="Search address"/>
+<button onclick="searchLocation()">Find</button>
 
-  <p>Tiles: <span id="tileCount">0</span></p>
-  <p>Quote: £<span id="quote">0</span></p>
+<label>Buffer</label>
+<select id="buffer">
+<option value="25">25m</option>
+<option value="50">50m</option>
+<option value="75">75m</option>
+<option value="100">100m</option>
+</select>
 
-  <button id="clearBtn">Clear Selection</button>
+<p>Tiles: <span id="tileCount">0</span></p>
+<p>Quote: £<span id="quote">0</span></p>
+
+<button id="clearBtn">Clear Selection</button>
 </div>
 
 <div id="map"></div>
 
-<!-- ✅ ✅ YOUR SCRIPT (NOW GUARANTEED TO RUN AFTER LIBRARIES) -->
 <script defer>
 document.addEventListener("DOMContentLoaded", function(){
-
-  console.log("✅ Script running");
 
 // ✅ Map
 const map = L.map('map').setView([52.48, -1.89], 13);
 
-// ✅ Basemap (FIXES GREY MAP)
+// ✅ Basemap
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19
 }).addTo(map);
@@ -82,117 +92,157 @@ const panel = document.getElementById("panel");
 L.DomEvent.disableClickPropagation(panel);
 L.DomEvent.disableScrollPropagation(panel);
 
-// ✅ Improve draw behaviour
+// ✅ Draw behaviour
 map.doubleClickZoom.disable();
 
-map.on('draw:drawstart', function() {
-  map.doubleClickZoom.disable();
+map.on('draw:drawstart', () => map.doubleClickZoom.disable());
+map.on('draw:drawstop', () => map.doubleClickZoom.enable());
+
+// ✅ Layers
+const drawnItems = new L.FeatureGroup().addTo(map);
+const hexGroup = L.layerGroup().addTo(map);
+const bufferGroup = L.layerGroup().addTo(map);
+
+// ✅ Draw tools
+const drawControl = new L.Control.Draw({
+  draw: {
+    polygon:true,
+    polyline:true,
+    rectangle:false,
+    circle:false,
+    marker:false
+  },
+  edit:{ featureGroup: drawnItems }
 });
 
-map.on('draw:drawstop', function() {
-  map.doubleClickZoom.enable();
-});
+map.addControl(drawControl);
 
-  const drawnItems = new L.FeatureGroup().addTo(map);
-  const hexGroup = L.layerGroup().addTo(map);
-  const bufferGroup = L.layerGroup().addTo(map);
+// ✅ Data
+let selectedHexes = new Set();
 
-  const drawControl = new L.Control.Draw({
-    draw: {
-      polygon:true,
-      polyline:true,
-      rectangle:false,
-      circle:false,
-      marker:false
-    },
-    edit:{ featureGroup: drawnItems }
-  });
+// ✅ Tiered Pricing
+function calculatePrice(count){
 
-  map.addControl(drawControl);
+  let price;
 
-  let selectedHexes = new Set();
+  if (count <= 50) price = 2.99;
+  else if (count <= 100) price = 2.5;
+  else if (count <= 200) price = 1.5;
+  else if (count <= 500) price = 0.99;
+  else price = 0.49;
 
-  function updateUI(){
-    document.getElementById("tileCount").innerText = selectedHexes.size;
-    document.getElementById("quote").innerText = (selectedHexes.size * 2.99).toFixed(0);
-  }
+  return (count * price).toFixed(0);
+}
 
-  function clearAll(){
-    console.log("✅ CLEAR CLICKED");
-    drawnItems.clearLayers();
-    hexGroup.clearLayers();
-    bufferGroup.clearLayers();
-    selectedHexes.clear();
-    updateUI();
-  }
+// ✅ UI
+function updateUI(){
+  const count = selectedHexes.size;
+  document.getElementById("tileCount").innerText = count;
+  document.getElementById("quote").innerText = calculatePrice(count);
+}
 
-  document.getElementById("clearBtn")
-    .addEventListener("click", clearAll);
+// ✅ Clear
+function clearAll(){
+  drawnItems.clearLayers();
+  hexGroup.clearLayers();
+  bufferGroup.clearLayers();
+  selectedHexes.clear();
+  updateUI();
+}
 
-  console.log("✅ Button wired");
+document.getElementById("clearBtn").addEventListener("click", clearAll);
 
-  function drawHex(hex){
-    const boundary = h3.h3ToGeoBoundary(hex, false);
-    
-L.polygon(boundary.map(p=>[p[0],p[1]]), {
-  color:"#003366",
-  weight:1,
-  fillColor:"#4a90e2",
-  fillOpacity:0.6   // 🔥 stronger
-}).addTo(hexGroup);
-  }
+// ✅ Search
+function searchLocation(){
 
-  function processGeometry(geojson){
-    hexGroup.clearLayers();
-    selectedHexes.clear();
+  const query = document.getElementById("searchBox").value;
 
-    const hexes = h3.polyfill(geojson.geometry.coordinates, 9);
+  fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}`)
+    .then(res => res.json())
+    .then(data => {
 
-    hexes.forEach(h=>{
-      selectedHexes.add(h);
-      drawHex(h);
+      if(data.length === 0) return;
+
+      const lat = parseFloat(data[0].lat);
+      const lon = parseFloat(data[0].lon);
+
+      map.setView([lat, lon], 15);
+
+      L.marker([lat, lon]).addTo(map);
     });
+}
 
-    updateUI();
+// ✅ Draw hex
+function drawHex(hex){
+  const boundary = h3.h3ToGeoBoundary(hex, false);
+
+  L.polygon(boundary.map(p => [p[0], p[1]]), {
+    color:"#003366",
+    weight:0.8,
+    fillColor:"#4a90e2",
+    fillOpacity:0.55
+  }).addTo(hexGroup);
+}
+
+// ✅ Process
+function processGeometry(geojson){
+
+  hexGroup.clearLayers();
+  selectedHexes.clear();
+
+  const hexes = h3.polyfill(geojson.geometry.coordinates, 9);
+
+  hexes.forEach(hex=>{
+    selectedHexes.add(hex);
+    drawHex(hex);
+  });
+
+  hexGroup.bringToFront();
+
+  updateUI();
+}
+
+// ✅ Draw event
+map.on('draw:created', function(e){
+
+  drawnItems.clearLayers();
+  hexGroup.clearLayers();
+  bufferGroup.clearLayers();
+
+  const layer = e.layer;
+
+  // ✅ subtle polygon styling
+  layer.setStyle({
+    color: "#000",
+    weight: 2,
+    fillOpacity: 0.1
+  });
+
+  drawnItems.addLayer(layer);
+
+  let geojson;
+
+  if (e.layerType === "polygon") {
+    geojson = layer.toGeoJSON();
   }
 
-  map.on('draw:created', function(e){
+  if (e.layerType === "polyline") {
+    const line = layer.toGeoJSON();
+    const buffer = parseFloat(document.getElementById("buffer").value);
 
-    drawnItems.clearLayers();
-    hexGroup.clearLayers();
-    bufferGroup.clearLayers();
+    geojson = turf.buffer(line, buffer, { units: 'meters' });
 
-    const layer = e.layer;
-    
-// ✅ Apply style to drawn polygon
-layer.setStyle({
-  color: "#000000",
-  weight: 2,
-  fillOpacity: 0.1
+    L.geoJSON(geojson, {
+      style:{ color:"red", weight:2, fillOpacity:0.1 }
+    }).addTo(bufferGroup);
+  }
+
+  processGeometry(geojson);
 });
-
-drawnItems.addLayer(layer);
-
-    let geojson;
-
-    if (e.layerType === "polygon") {
-      geojson = layer.toGeoJSON();
-    }
-
-    if (e.layerType === "polyline") {
-      const line = layer.toGeoJSON();
-      geojson = turf.buffer(line, 50, { units:'meters' });
-
-      L.geoJSON(geojson, {
-        style:{ color:"red", weight: 2, fillOpacity:0.1 }
-      }).addTo(bufferGroup);
-    }
-
-    processGeometry(geojson);
-  });
 
 });
 </script>
 
 </body>
 </html>
+``
