@@ -159,8 +159,8 @@ clearBtn.onclick = clearAll;
 window.searchLocation = function(){
   const query = searchBox.value;
 
-  fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}`)
-    .then(res => res.json())
+fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}`)
+     .then(res => res.json())
     .then(data => {
       if(!data.length) return;
       map.setView([data[0].lat, data[0].lon], 15);
@@ -217,7 +217,6 @@ map.on('draw:created', function(e){
 
   const layer = e.layer;
 
-  // ✅ BLUE SITE AREA
   layer.setStyle({
     color: "#0078d4",
     weight: 2,
@@ -231,25 +230,25 @@ map.on('draw:created', function(e){
 
   if(e.layerType === "polygon"){
     geo = layer.toGeoJSON();
+    processGeometry(geo);
   }
-
+ 
   if(e.layerType === "polyline"){
-   if(e.layerType === "polyline"){
-
+  
   const bufferValue = parseFloat(document.getElementById("buffer").value);
 
   const buffered = turf.buffer(layer.toGeoJSON(), bufferValue, { units:'meters' });
 
-  // ✅ Draw visible buffer
+  // ✅ Draw buffer
   L.geoJSON(buffered, {
     style: {
       color:"#0078d4",
       weight:2,
-      fillOpacity:0.55
+      fillOpacity:0.25
     }
   }).addTo(bufferGroup);
 
-  // ✅ Handle both Polygon and MultiPolygon properly
+  // ✅ Handle Polygon + MultiPolygon
   let coords;
 
   if (buffered.geometry.type === "Polygon") {
@@ -260,14 +259,14 @@ map.on('draw:created', function(e){
     coords = buffered.geometry.coordinates;
   }
 
-  // ✅ Convert to lng/lat for H3
+  // ✅ Convert coords for H3
   const poly = coords.map(polygon =>
     polygon[0].map(c => [c[1], c[0]])
   );
 
-  // ✅ Run H3
   const hexes = h3.polyfill(poly, 9);
 
+  // ✅ Clear + redraw hexes
   hexLayers.forEach(l => map.removeLayer(l));
   hexLayers = [];
   selectedHexes.clear();
@@ -278,6 +277,7 @@ map.on('draw:created', function(e){
   });
 
   updateUI();
+} 
 
 });
 </script>
