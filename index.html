@@ -192,7 +192,7 @@ function processGeometry(geo){
   selectedHexes.clear();
 
   // ✅ STEP 1: expand polygon slightly (meters)
-  const expanded = turf.buffer(geo, 140, { units: 'meters' });
+  const expanded = turf.buffer(geo, 160, { units: 'meters' });
 
   // ✅ STEP 2: convert coords correctly
   const coords = expanded.geometry.coordinates[0].map(c => [c[1], c[0]]);
