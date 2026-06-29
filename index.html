@@ -173,11 +173,11 @@ function drawHex(hex){
   const boundary = h3.h3ToGeoBoundary(hex, false);
 
   const hexLayer = L.polygon(boundary.map(p => [p[0], p[1]]), {
-    pane: 'hexPane',        // ✅ THIS IS THE KEY FIX
-    color:"#002244",
-    weight:1,
-    fillColor:"#0078d4",
-    fillOpacity:0.5
+    pane: 'hexPane',        // ✅ THIS IS THE KEY FIX 
+    color: "#003366",
+    weight: 0.5,
+    fillColor: "#4a90e2",
+    fillOpacity: 0.55
   }).addTo(map);
 
   hexLayers.push(hexLayer);
@@ -217,12 +217,14 @@ map.on('draw:created', function(e){
 
   const layer = e.layer;
 
-  layer.setStyle({
-    color: "#0078d4",
-    weight: 2,
-    fillColor:"#0078d4",
-    fillOpacity: 0.12
-  });
+  
+layer.setStyle({
+  color: "#d12b2b",       // ✅ red outline
+  weight: 3,
+  fillOpacity: 0.05       // ✅ very light fill
+});
+
+layer.bringToFront();     // ✅ keep boundary visible
 
   drawnItems.addLayer(layer);
 
@@ -264,7 +266,7 @@ map.on('draw:created', function(e){
     polygon[0].map(c => [c[1], c[0]])
   );
 
-  const hexes = h3.polyfill(poly, 9);
+  const hexes = h3.polyfill([coords], 9, true);
 
   // ✅ Clear + redraw hexes
   hexLayers.forEach(l => map.removeLayer(l));
