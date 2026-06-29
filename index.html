@@ -177,7 +177,7 @@ function drawHex(hex){
     color: "#003366",
     weight: 0.5,
     fillColor: "#4a90e2",
-    fillOpacity: 0.55
+    fillOpacity: 0.5
   }).addTo(map);
 
   hexLayers.push(hexLayer);
@@ -191,17 +191,21 @@ function processGeometry(geo){
   hexLayers = [];
   selectedHexes.clear();
 
-  // ✅ FIX: convert lat/lng → lng/lat
-  const coords = geo.geometry.coordinates[0].map(c => [c[1], c[0]]);
+  // ✅ STEP 1: expand polygon slightly (meters)
+  const expanded = turf.buffer(geo, 40, { units: 'meters' });
+
+  // ✅ STEP 2: convert coords correctly
+  const coords = expanded.geometry.coordinates[0].map(c => [c[1], c[0]]);
 
   const hexes = h3.polyfill([coords], 9);
 
+  // ✅ draw hexes
   hexes.forEach(h => {
     selectedHexes.add(h);
     drawHex(h);
   });
 
-  updateUI();
+   updateUI();
 }
 
 // ✅ BUFFER UI CONTROL
