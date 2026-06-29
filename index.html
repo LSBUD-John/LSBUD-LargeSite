@@ -195,7 +195,7 @@ function processGeometry(geo){
 
   // ✅ ONLY expand if it came from a drawn polygon
   if (geo.properties && geo.properties.source === "polygon") {
-    workingGeo = turf.buffer(geo, 175, { units: 'meters' });
+    workingGeo = turf.buffer(geo, 185, { units: 'meters' });
   }
 
   const coords = workingGeo.geometry.coordinates[0].map(c => [c[1], c[0]]);
