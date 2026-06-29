@@ -220,7 +220,6 @@ map.on('draw:created', function(e){
   bufferGroup.clearLayers();
 
   const layer = e.layer;
-
   
 layer.setStyle({
   color: "#d12b2b",       // ✅ red outline
@@ -229,20 +228,16 @@ layer.setStyle({
 });
 
 layer.bringToFront();     // ✅ keep boundary visible
-
   drawnItems.addLayer(layer);
-
-  let geo;
-
+ 
   if(e.layerType === "polygon"){
-    geo = layer.toGeoJSON();
+    const geo = layer.toGeoJSON();
     processGeometry(geo);
   }
  
   if(e.layerType === "polyline"){
   
   const bufferValue = parseFloat(document.getElementById("buffer").value);
-
   const buffered = turf.buffer(layer.toGeoJSON(), bufferValue, { units:'meters' });
 
   // ✅ Draw buffer
@@ -255,37 +250,6 @@ layer.bringToFront();     // ✅ keep boundary visible
   }).addTo(bufferGroup);
 
 processGeometry(buffered);
-}
-    
-  // ✅ Handle Polygon + MultiPolygon
-  let coords;
-
-  if (buffered.geometry.type === "Polygon") {
-    coords = [buffered.geometry.coordinates];
-  }
-
-  if (buffered.geometry.type === "MultiPolygon") {
-    coords = buffered.geometry.coordinates;
-  }
-
-  // ✅ Convert coords for H3
-  const poly = coords.map(polygon =>
-    polygon[0].map(c => [c[1], c[0]])
-  );
-
-  const hexes = h3.polyfill([coords], 9, true);
-
-  // ✅ Clear + redraw hexes
-  hexLayers.forEach(l => map.removeLayer(l));
-  hexLayers = [];
-  selectedHexes.clear();
-
-  hexes.forEach(h => {
-    selectedHexes.add(h);
-    drawHex(h);
-  });
-
-  updateUI();
 
 }   // ✅ CLOSES polyline IF
 
