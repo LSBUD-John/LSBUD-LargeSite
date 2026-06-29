@@ -177,7 +177,7 @@ function drawHex(hex){
     color: "#003366",
     weight: 0.5,
     fillColor: "#4a90e2",
-    fillOpacity: 0.5
+    fillOpacity: 0.55
   }).addTo(map);
 
   hexLayers.push(hexLayer);
@@ -248,7 +248,7 @@ layer.bringToFront();     // ✅ keep boundary visible
   // ✅ Draw buffer
   L.geoJSON(buffered, {
     style: {
-      color:"#0078d4",
+      color:"#d12b2b",
       weight:2,
       fillOpacity:0.25
     }
