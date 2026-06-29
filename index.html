@@ -193,12 +193,11 @@ function processGeometry(geo){
 
   let workingGeo = geo;
 
-  // ✅ ONLY expand polygons (not buffered lines)
-  if (geo.geometry.type === "Polygon") {
+  // ✅ ONLY expand if it came from a drawn polygon
+  if (geo.properties && geo.properties.source === "polygon") {
     workingGeo = turf.buffer(geo, 175, { units: 'meters' });
   }
 
-  // ✅ Convert coords correctly
   const coords = workingGeo.geometry.coordinates[0].map(c => [c[1], c[0]]);
 
   const hexes = h3.polyfill([coords], 9);
@@ -208,9 +207,9 @@ function processGeometry(geo){
     drawHex(h);
   });
 
-     updateUI();
+  updateUI();
 }
-
+ 
 // ✅ BUFFER UI CONTROL
 map.on('draw:drawstart', function(e){
   bufferSection.style.display = (e.layerType === "polyline") ? "block" : "none";
@@ -235,6 +234,8 @@ layer.bringToFront();     // ✅ keep boundary visible
  
   if(e.layerType === "polygon"){
     const geo = layer.toGeoJSON();
+    geo.properties = { source: "polygon" };
+    
     processGeometry(geo);
   }
  
