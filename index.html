@@ -175,9 +175,9 @@ function drawHex(hex){
   const hexLayer = L.polygon(boundary.map(p => [p[0], p[1]]), {
     pane: 'hexPane',        // ✅ THIS IS THE KEY FIX 
     color: "#003366",
-    weight: 0.5,
+    weight: 0.4,
     fillColor: "#4a90e2",
-    fillOpacity: 0.55
+    fillOpacity: 0.6
   }).addTo(map);
 
   hexLayers.push(hexLayer);
@@ -191,21 +191,24 @@ function processGeometry(geo){
   hexLayers = [];
   selectedHexes.clear();
 
-  // ✅ STEP 1: expand polygon slightly (meters)
-  const expanded = turf.buffer(geo, 175, { units: 'meters' });
+  let workingGeo = geo;
 
-  // ✅ STEP 2: convert coords correctly
-  const coords = expanded.geometry.coordinates[0].map(c => [c[1], c[0]]);
+  // ✅ ONLY expand polygons (not buffered lines)
+  if (geo.geometry.type === "Polygon") {
+    workingGeo = turf.buffer(geo, 175, { units: 'meters' });
+  }
+
+  // ✅ Convert coords correctly
+  const coords = workingGeo.geometry.coordinates[0].map(c => [c[1], c[0]]);
 
   const hexes = h3.polyfill([coords], 9);
 
-  // ✅ draw hexes
   hexes.forEach(h => {
     selectedHexes.add(h);
     drawHex(h);
   });
 
-   updateUI();
+     updateUI();
 }
 
 // ✅ BUFFER UI CONTROL
