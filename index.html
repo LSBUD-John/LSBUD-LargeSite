@@ -254,51 +254,65 @@ document.addEventListener("DOMContentLoaded", function(){
   }
 
   function redrawSketch(){
-    if(currentSketchLayer){
-      map.removeLayer(currentSketchLayer);
-      currentSketchLayer = null;
+
+  if(currentSketchLayer){
+    map.removeLayer(currentSketchLayer);
+    currentSketchLayer = null;
+  }
+
+  if(currentPoints.length === 0) return;
+
+  // ✅ LINE MODE
+  if(drawMode === "line"){
+
+    // Show first point as marker
+    if(currentPoints.length === 1){
+      currentSketchLayer = L.circleMarker(currentPoints[0], {
+        radius: 5,
+        color: '#d12b2b',
+        fillColor: '#d12b2b',
+        fillOpacity: 1
+      }).addTo(map);
     }
 
-    if(currentPoints.length === 0) return;
-
-    if(drawMode === "line"){
+    // Show line once 2 or more points exist
+    if(currentPoints.length > 1){
       currentSketchLayer = L.polyline(currentPoints, {
         color:'#d12b2b',
         weight:3
       }).addTo(map);
     }
-
-    if(drawMode === "polygon"){
-      if(currentPoints.length === 1){
-        currentSketchLayer = L.circleMarker(currentPoints[0], {
-          radius:5,
-          color:'#d12b2b',
-          fillColor:'#d12b2b',
-          fillOpacity:1
-        }).addTo(map);
-      } else {
-        currentSketchLayer = L.polygon(currentPoints, {
-          color:'#d12b2b',
-          weight:3,
-          fillColor:'#d12b2b',
-          fillOpacity:0.08
-        }).addTo(map);
-      }
-    }
   }
 
+  // ✅ POLYGON MODE
+  if(drawMode === "polygon"){
+
+    if(currentPoints.length === 1){
+      currentSketchLayer = L.circleMarker(currentPoints[0], {
+        radius:5,
+        color:'#d12b2b',
+        fillColor:'#d12b2b',
+        fillOpacity:1
+      }).addTo(map);
+    }
+
+    if(currentPoints.length > 1){
+      currentSketchLayer = L.polygon(currentPoints, {
+        color:'#d12b2b',
+        weight:3,
+        fillColor:'#d12b2b',
+        fillOpacity:0.08
+      }).addTo(map);
+    }
+  }
+}
+ 
   function startDrawing(mode){
-    clearAll();
-    drawMode = mode;
-    currentPoints = [];
+  clearAll();
+  drawMode = mode;
+  currentPoints = [];
 
-    if(mode === "polygon"){
-      alert("Polygon mode: click points on map, then click Finish Drawing.");
-    }
-
-    if(mode === "line"){
-      alert("Line mode: click line points on map, then click Finish Drawing.");
-    }
+  console.log(mode + " drawing mode started");
   }
 
   function finishDrawing(){
