@@ -240,14 +240,13 @@ map.on('draw:created', function(e){
   if(e.layerType === "polyline"){
 
     const pts = layer.getLatLngs();
+   
+// ✅ Only ignore if less than 2 points (prevents accidental trigger)
+  if(pts.length < 2){
+    return;
+  }
 
-    // ✅ FIX: ignore incomplete lines (prevents 2-click close bug)
-    
-      // keep drawing active (do NOT process yet)
-      return;
-    }
-
-    handleLine(layer.toGeoJSON());
+  handleLine(layer.toGeoJSON());
   }
 
 });
