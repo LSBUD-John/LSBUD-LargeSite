@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8" />
-<title>Hex Site Selection</title>
+<title>LSBUD Large Site Hex Selection</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 
@@ -26,7 +26,9 @@ body {
   position:absolute;
   top:20px;
   right:20px;
-  width:300px;
+  width:330px;
+  max-height:92vh;
+  overflow-y:auto;
   padding:16px;
   background:white;
   z-index:9999;
@@ -34,11 +36,19 @@ body {
   box-shadow:0 0 10px rgba(0,0,0,0.2);
 }
 
-input, select {
+h3 {
+  margin-top:0;
+}
+
+input, select, textarea {
   width:100%;
   padding:8px;
   margin-bottom:10px;
   box-sizing:border-box;
+}
+
+textarea {
+  min-height:70px;
 }
 
 button {
@@ -61,9 +71,24 @@ button.danger {
   background:#d12b2b;
 }
 
+button.success {
+  background:#107c10;
+}
+
 button.activeDraw {
   background:#004578;
   outline:3px solid #80c7ff;
+}
+
+.section {
+  border-top:1px solid #ddd;
+  padding-top:12px;
+  margin-top:12px;
+}
+
+.small {
+  font-size:12px;
+  color:#555;
 }
 
 #modeStatus {
@@ -71,6 +96,16 @@ button.activeDraw {
   font-weight:600;
   color:#004578;
   margin:6px 0 12px 0;
+}
+
+#quoteStatus {
+  font-size:13px;
+  color:#107c10;
+  font-weight:600;
+}
+
+.hidden {
+  display:none;
 }
 
 .leaflet-tile-pane {
@@ -86,6 +121,7 @@ button.activeDraw {
 <body>
 
 <div id="panel">
+
   <h3>Search</h3>
 
   <input id="searchBox" placeholder="Search address">
@@ -106,17 +142,76 @@ button.activeDraw {
 
   <div id="modeStatus">No drawing mode selected</div>
 
-  <p>Selected Area: <span id="selectedArea">0.000</span> sq km</p>
-  <p>Tiles: <span id="tileCount">0</span></p>
-  <p>Quote: £<span id="quote">0</span></p>
+  <div class="section">
+    <p>Selected Area: <span id="selectedArea">0.000</span> sq km</p>
+    <p>Tiles: <span id="tileCount">0</span></p>
+    <p>Quote: £<span id="quoteAmount">0</span></p>
+  </div>
+
+  <div class="section">
+    <h3>Quote</h3>
+
+    <input id="quoteEmail" placeholder="Email address for saved quote">
+
+    <button id="saveQuoteBtn">Save Quote</button>
+    <button id="acceptQuoteBtn" class="success">Accept Quote</button>
+
+    <p>Quote Ref: <strong><span id="quoteRefText">Not created</span></strong></p>
+    <p id="quoteStatus"></p>
+
+    <button id="downloadQuoteBtn" class="secondary">Download Quote JSON</button>
+  </div>
+
+  <div id="orderSection" class="section hidden">
+    <h3>Search Details</h3>
+
+    <label>Organisation</label>
+    <input id="organisation" placeholder="Organisation name">
+
+    <label>Contact name</label>
+    <input id="contactName" placeholder="Contact name">
+
+    <label>Contact email</label>
+    <input id="contactEmail" placeholder="Contact email">
+
+    <label>Contact phone</label>
+    <input id="contactPhone" placeholder="Contact phone">
+
+    <label>Project reference</label>
+    <input id="projectRef" placeholder="Your project reference">
+
+    <label>Category</label>
+    <select id="category">
+      <option value="Info Only">Info Only</option>
+      <option value="Planned">Planned</option>
+      <option value="Emergency">Emergency</option>
+    </select>
+
+    <label>Type of works</label>
+    <select id="workType"></select>
+
+    <label>Planned start date</label>
+    <input id="plannedDate" type="date">
+
+    <label>Reason / notes</label>
+    <textarea id="notes" placeholder="Describe the reason for the search, method of works, works duration, depths, etc."></textarea>
+
+    <label>Payment method</label>
+    <select id="paymentMethod">
+      <option value="Card">Card payment</option>
+      <option value="BACS">BACS / Invoice</option>
+    </select>
+
+    <button id="createOrderBtn" class="success">Add to Basket / Create Order</button>
+    <button id="downloadPayloadBtn" class="secondary">Download OneCall Payload</button>
+  </div>
+
 </div>
 
 <div id="map"></div>
 
 <script>
 function initApp(){
-
-  console.log("Initialising map app");
 
   const H3_RESOLUTION = 9;
   const EDGE_CANDIDATE_BUFFER_METRES = 500;
@@ -148,9 +243,11 @@ function initApp(){
   let selectedHexes = new Set();
 
   let lastLineGeo = null;
+  let selectedGeometry = null;
+  let currentQuote = null;
 
   const tileCount = document.getElementById("tileCount");
-  const quote = document.getElementById("quote");
+  const quoteAmount = document.getElementById("quoteAmount");
   const selectedArea = document.getElementById("selectedArea");
   const bufferSelect = document.getElementById("buffer");
 
@@ -158,12 +255,77 @@ function initApp(){
   const drawLineBtn = document.getElementById("drawLineBtn");
   const modeStatus = document.getElementById("modeStatus");
 
+  const quoteRefText = document.getElementById("quoteRefText");
+  const quoteStatus = document.getElementById("quoteStatus");
+  const orderSection = document.getElementById("orderSection");
+
+  const category = document.getElementById("category");
+  const workType = document.getElementById("workType");
+
+  const workTypeOptions = {
+    "Info Only": [
+      "Asset information review",
+      "Feasibility study",
+      "Site due diligence",
+      "Other"
+    ],
+    "Planned": [
+      "Housing development",
+      "Commercial development",
+      "Roadworks",
+      "Utility works",
+      "Drainage works",
+      "Site investigation",
+      "Demolition",
+      "Landscaping",
+      "Other"
+    ],
+    "Emergency": [
+      "Emergency excavation",
+      "Emergency repair",
+      "Incident response",
+      "Urgent utility works",
+      "Other"
+    ]
+  };
+
+  function populateWorkTypes(){
+    const selectedCategory = category.value;
+    workType.innerHTML = "";
+
+    workTypeOptions[selectedCategory].forEach(optionText => {
+      const option = document.createElement("option");
+      option.value = optionText;
+      option.textContent = optionText;
+      workType.appendChild(option);
+    });
+  }
+
+  category.onchange = populateWorkTypes;
+  populateWorkTypes();
+
   function calculatePrice(count){
     if(count <= 50) return count * 2.99;
     if(count <= 100) return count * 2.50;
     if(count <= 200) return count * 1.50;
     if(count <= 500) return count * 0.99;
     return count * 0.49;
+  }
+
+  function getPriceBand(count){
+    if(count <= 50) return "1-50";
+    if(count <= 100) return "51-100";
+    if(count <= 200) return "101-200";
+    if(count <= 500) return "201-500";
+    return "500+";
+  }
+
+  function getUnitPrice(count){
+    if(count <= 50) return 2.99;
+    if(count <= 100) return 2.50;
+    if(count <= 200) return 1.50;
+    if(count <= 500) return 0.99;
+    return 0.49;
   }
 
   function updateModeUI(){
@@ -196,7 +358,7 @@ function initApp(){
 
   function updateUI(){
     tileCount.innerText = selectedHexes.size;
-    quote.innerText = Math.round(calculatePrice(selectedHexes.size));
+    quoteAmount.innerText = Math.round(calculatePrice(selectedHexes.size));
     updateModeUI();
   }
 
@@ -242,9 +404,16 @@ function initApp(){
     }
 
     lastLineGeo = null;
+    selectedGeometry = null;
+    currentQuote = null;
+
+    quoteRefText.innerText = "Not created";
+    quoteStatus.innerText = "";
+    orderSection.classList.add("hidden");
 
     clearHexes();
     resetSelectedArea();
+    updateModeUI();
   }
 
   function drawHex(hex){
@@ -268,6 +437,32 @@ function initApp(){
     ring.push(ring[0]);
 
     return turf.polygon([ring]);
+  }
+
+  function h3ToWkt(hex){
+    const boundary = h3.h3ToGeoBoundary(hex, false);
+
+    const coords = boundary.map(p => {
+      const lat = p[0];
+      const lng = p[1];
+      return `${lng.toFixed(6)} ${lat.toFixed(6)}`;
+    });
+
+    coords.push(coords[0]);
+
+    return `POLYGON((${coords.join(", ")}))`;
+  }
+
+  function polygonsFromGeometry(geometry){
+    if(geometry.type === "Polygon"){
+      return [geometry.coordinates];
+    }
+
+    if(geometry.type === "MultiPolygon"){
+      return geometry.coordinates;
+    }
+
+    return [];
   }
 
   function getCandidateHexes(geo){
@@ -336,8 +531,15 @@ function initApp(){
       }
     }).addTo(map);
 
+    selectedGeometry = buffered;
+
     updateSelectedArea(buffered);
     selectIntersectingHexes(buffered);
+
+    currentQuote = null;
+    quoteRefText.innerText = "Not created";
+    quoteStatus.innerText = "";
+    orderSection.classList.add("hidden");
   }
 
   function redrawSketch(){
@@ -419,9 +621,15 @@ function initApp(){
       const geo = turf.polygon([ring]);
 
       lastLineGeo = null;
+      selectedGeometry = geo;
 
       updateSelectedArea(geo);
       selectIntersectingHexes(geo);
+
+      currentQuote = null;
+      quoteRefText.innerText = "Not created";
+      quoteStatus.innerText = "";
+      orderSection.classList.add("hidden");
     }
 
     if(drawMode === "line"){
@@ -451,6 +659,215 @@ function initApp(){
     drawMode = null;
     currentPoints = [];
     updateModeUI();
+  }
+
+  function generateQuoteRef(){
+    const year = new Date().getFullYear();
+    const timePart = Date.now().toString().slice(-6);
+    const randomPart = Math.floor(Math.random() * 900 + 100);
+    return `LSBUD-LS-${year}-${timePart}${randomPart}`;
+  }
+
+  function buildTiles(quoteRef){
+    const hexes = Array.from(selectedHexes).sort();
+
+    return hexes.map((hex, index) => {
+      const number = index + 1;
+      const padded = String(number).padStart(3, "0");
+
+      return {
+        tileNumber: number,
+        tileRef: `${quoteRef}-${padded}`,
+        quoteRef: quoteRef,
+        h3Index: hex,
+        wkt: h3ToWkt(hex)
+      };
+    });
+  }
+
+  function buildQuoteObject(status){
+    const quoteRef = currentQuote ? currentQuote.quoteRef : generateQuoteRef();
+
+    const count = selectedHexes.size;
+    const total = Math.round(calculatePrice(count));
+
+    return {
+      quoteRef: quoteRef,
+      status: status,
+      email: document.getElementById("quoteEmail").value,
+      createdAt: new Date().toISOString(),
+      selectedAreaSqKm: parseFloat(selectedArea.innerText),
+      tileCount: count,
+      priceBand: getPriceBand(count),
+      unitPrice: getUnitPrice(count),
+      quoteTotal: total,
+      bufferMeters: lastLineGeo ? parseFloat(bufferSelect.value) : null,
+      geometryType: lastLineGeo ? "line-buffer" : "polygon",
+      hexes: Array.from(selectedHexes).sort(),
+      tiles: buildTiles(quoteRef)
+    };
+  }
+
+  function storeQuote(quote){
+    localStorage.setItem(`quote_${quote.quoteRef}`, JSON.stringify(quote));
+  }
+
+  function showQuote(quote){
+    currentQuote = quote;
+    quoteRefText.innerText = quote.quoteRef;
+    quoteStatus.innerText = `Quote ${quote.status}. ${quote.tileCount} tiles. Total £${quote.quoteTotal}.`;
+  }
+
+  function saveQuote(){
+    if(selectedHexes.size === 0){
+      alert("Please draw a polygon or line before saving a quote.");
+      return;
+    }
+
+    const quote = buildQuoteObject("Saved");
+    storeQuote(quote);
+    showQuote(quote);
+
+    const retrieveLink = `${location.origin}${location.pathname}?quote=${quote.quoteRef}`;
+
+    if(quote.email){
+      const subject = encodeURIComponent(`LSBUD Large Site Quote ${quote.quoteRef}`);
+      const body = encodeURIComponent(
+        `Your quote reference is ${quote.quoteRef}\n\n` +
+        `Selected Area: ${quote.selectedAreaSqKm} sq km\n` +
+        `Tiles: ${quote.tileCount}\n` +
+        `Quote Total: £${quote.quoteTotal}\n\n` +
+        `Retrieve quote:\n${retrieveLink}`
+      );
+
+      window.location.href = `mailto:${quote.email}?subject=${subject}&body=${body}`;
+    } else {
+      alert(`Quote saved locally.\nQuote Ref: ${quote.quoteRef}\nRetrieve link:\n${retrieveLink}`);
+    }
+  }
+
+  function acceptQuote(){
+    if(selectedHexes.size === 0){
+      alert("Please draw a polygon or line before accepting a quote.");
+      return;
+    }
+
+    const quote = buildQuoteObject("Accepted");
+    storeQuote(quote);
+    showQuote(quote);
+
+    document.getElementById("contactEmail").value = quote.email || "";
+    orderSection.classList.remove("hidden");
+  }
+
+  function buildOrderPayload(){
+    if(!currentQuote){
+      currentQuote = buildQuoteObject("Accepted");
+      storeQuote(currentQuote);
+      showQuote(currentQuote);
+    }
+
+    return {
+      quote: currentQuote,
+      searchDetails: {
+        organisation: document.getElementById("organisation").value,
+        contactName: document.getElementById("contactName").value,
+        contactEmail: document.getElementById("contactEmail").value,
+        contactPhone: document.getElementById("contactPhone").value,
+        projectRef: document.getElementById("projectRef").value,
+        category: document.getElementById("category").value,
+        workType: document.getElementById("workType").value,
+        plannedDate: document.getElementById("plannedDate").value,
+        notes: document.getElementById("notes").value,
+        paymentMethod: document.getElementById("paymentMethod").value
+      },
+      oneCallExport: currentQuote.tiles.map(tile => ({
+        quoteRef: tile.quoteRef,
+        tileNumber: tile.tileNumber,
+        tileRef: tile.tileRef,
+        h3Index: tile.h3Index,
+        geometryWkt: tile.wkt
+      }))
+    };
+  }
+
+  function downloadJson(filename, object){
+    const blob = new Blob([JSON.stringify(object, null, 2)], {
+      type:"application/json"
+    });
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = filename;
+    link.click();
+
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadQuote(){
+    if(!currentQuote){
+      if(selectedHexes.size === 0){
+        alert("Please create a quote first.");
+        return;
+      }
+
+      currentQuote = buildQuoteObject("Draft");
+      storeQuote(currentQuote);
+      showQuote(currentQuote);
+    }
+
+    downloadJson(`${currentQuote.quoteRef}.json`, currentQuote);
+  }
+
+  function createOrder(){
+    const payload = buildOrderPayload();
+
+    currentQuote.status = payload.searchDetails.paymentMethod === "BACS"
+      ? "Invoice Requested"
+      : "Awaiting Card Payment";
+
+    storeQuote(currentQuote);
+    showQuote(currentQuote);
+
+    alert(
+      `Order created for ${currentQuote.quoteRef}.\n\n` +
+      `Payment method: ${payload.searchDetails.paymentMethod}\n` +
+      `Use Download OneCall Payload to export the service delivery data.`
+    );
+  }
+
+  function downloadOneCallPayload(){
+    const payload = buildOrderPayload();
+    downloadJson(`${payload.quote.quoteRef}-onecall-payload.json`, payload);
+  }
+
+  function loadQuoteFromUrl(){
+    const params = new URLSearchParams(location.search);
+    const quoteRef = params.get("quote");
+
+    if(!quoteRef) return;
+
+    const stored = localStorage.getItem(`quote_${quoteRef}`);
+
+    if(!stored){
+      alert("Quote not found in this browser session.");
+      return;
+    }
+
+    clearAll();
+
+    const quote = JSON.parse(stored);
+
+    quote.hexes.forEach(hex => {
+      selectedHexes.add(hex);
+      drawHex(hex);
+    });
+
+    selectedArea.innerText = quote.selectedAreaSqKm.toFixed(3);
+    updateUI();
+    showQuote(quote);
   }
 
   map.on("click", function(e){
@@ -510,13 +927,35 @@ function initApp(){
       });
   };
 
+  document.getElementById("saveQuoteBtn").onclick = function(){
+    saveQuote();
+  };
+
+  document.getElementById("acceptQuoteBtn").onclick = function(){
+    acceptQuote();
+  };
+
+  document.getElementById("downloadQuoteBtn").onclick = function(){
+    downloadQuote();
+  };
+
+  document.getElementById("createOrderBtn").onclick = function(){
+    createOrder();
+  };
+
+  document.getElementById("downloadPayloadBtn").onclick = function(){
+    downloadOneCallPayload();
+  };
+
   updateModeUI();
+  loadQuoteFromUrl();
 
   setTimeout(function(){
     map.invalidateSize();
   }, 200);
 
-  console.log("Map initialised successfully");
+  console.log("LSBUD large site prototype initialised");
+
 }
 
 initApp();
