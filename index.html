@@ -191,9 +191,10 @@ function processPolygon(geo){
 
 // ✅ LINE (FINAL CORRECT VERSION)
 function processLine(line){
-
+ 
   const bufferValue = parseFloat(buffer.value);
 
+  // ✅ draw visual buffer
   const buffered = turf.buffer(line, bufferValue, { units:'meters' });
 
   bufferGroup.clearLayers();
@@ -202,52 +203,58 @@ function processLine(line){
     style:{ color:"#d12b2b", weight:2, fillOpacity:0.25 }
   }).addTo(bufferGroup);
 
+  // ✅ reset
   hexLayers.forEach(l => map.removeLayer(l));
   hexLayers = [];
   selectedHexes.clear();
 
   const length = turf.length(line, {units:'kilometers'});
+
+  // ✅ dense sampling = smoother corridor
   const step = 0.02;
 
   let rawHexes = new Set();
 
+  // ✅ STEP 1: sample line
   for (let d = 0; d <= length; d += step){
     const pt = turf.along(line, d, {units:'kilometers'});
-    const [lng,lat] = pt.geometry.coordinates;
-    rawHexes.add(h3.geoToH3(lat,lng,9));
+    const [lng, lat] = pt.geometry.coordinates;
+    rawHexes.add(h3.geoToH3(lat, lng, 9));
   }
 
-  let finalHexes = new Set();
+  // ✅ STEP 2: filter by distance (TRUE buffer match)
+  let filteredHexes = new Set();
 
-  rawHexes.forEach(h=>{
+  rawHexes.forEach(h => {
     const center = h3.h3ToGeo(h);
     const pt = turf.point([center[1], center[0]]);
     const dist = turf.pointToLineDistance(pt, line, {units:'meters'});
 
     if (dist <= bufferValue){
-      finalHexes.add(h);
+      filteredHexes.add(h);
     }
   });
 
-  // ✅ controlled expansion
-  let expanded = new Set([...finalHexes]);
+  // ✅ STEP 3: minimal expansion to fill gaps (controlled)
+  let finalHexes = new Set([...filteredHexes]);
 
-  finalHexes.forEach(h=>{
-    h3.kRing(h,1).forEach(n=>{
+  filteredHexes.forEach(h => {
+    h3.kRing(h, 1).forEach(n => {
       const center = h3.h3ToGeo(n);
       const pt = turf.point([center[1], center[0]]);
-      const dist = turf.pointToLineDistance(pt,line,{units:'meters'});
+      const dist = turf.pointToLineDistance(pt, line, {units:'meters'});
 
       if (dist <= bufferValue){
-        expanded.add(n);
+        finalHexes.add(n);
       }
     });
   });
 
-  expanded.forEach(h=>drawHex(h));
+  // ✅ DRAW
+  finalHexes.forEach(h => drawHex(h));
 
-  selectedHexes = expanded;
-
+  selectedHexes = finalHexes;
+  
   updateUI();
 }
 
@@ -272,8 +279,16 @@ map.on('draw:created', function(e){
   }
 
   if (e.layerType === "polyline"){
-    processLine(layer.toGeoJSON());
+      
+const latlngs = layer.getLatLngs();
+
+  // ✅ REQUIRE at least 3 points (2 segments)
+  if (latlngs.length < 3) {
+    return;
   }
+
+  processLine(layer.toGeoJSON());
+ }
 });
 
 });
