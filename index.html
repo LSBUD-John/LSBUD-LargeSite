@@ -23,25 +23,19 @@ body { margin:0; font-family: Arial; }
   box-shadow:0 0 12px rgba(0,0,0,0.2);
 }
 
-.section { margin-bottom:16px; }
-
 input, select {
   width:100%;
   padding:8px;
-  margin-top:6px;
   margin-bottom:10px;
-  box-sizing:border-box;
 }
 
 button {
   width:100%;
   padding:10px;
-  margin-top:8px;
-  border:none;
-  cursor:pointer;
   background:#0078d4;
   color:white;
-  font-weight:600;
+  border:none;
+  cursor:pointer;
   border-radius:4px;
 }
 
@@ -59,14 +53,11 @@ button {
 <body>
 
 <div id="panel">
-<h3>Search</h3>
 
-<div class="section">
+<h3>Search</h3>
 <input id="searchBox" placeholder="Search address">
 <button onclick="searchLocation()">Find</button>
-</div>
 
-<div class="section">
 <label>Buffer (line only)</label>
 <select id="buffer">
 <option value="25">25m</option>
@@ -74,12 +65,12 @@ button {
 <option value="75">75m</option>
 <option value="100">100m</option>
 </select>
-</div>
 
 <p>Tiles: <span id="tileCount">0</span></p>
 <p>Quote: £<span id="quote">0</span></p>
 
 <button id="clearBtn">Clear Selection</button>
+
 </div>
 
 <div id="map"></div>
@@ -89,6 +80,9 @@ document.addEventListener("DOMContentLoaded", function(){
 
 // ✅ MAP
 const map = L.map('map').setView([52.48, -1.89], 13);
+
+// ✅ IMPORTANT FIX: stop zoom interfering with draw finish
+map.doubleClickZoom.disable();
 
 // ✅ HEX PANE
 map.createPane('hexPane');
@@ -100,28 +94,23 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap contributors | LSBUD'
 }).addTo(map);
 
-// ✅ PANEL INTERACTION
-const panel = document.getElementById("panel");
-L.DomEvent.disableClickPropagation(panel);
-L.DomEvent.disableScrollPropagation(panel);
-
-// ✅ DRAW TOOL
+// ✅ LAYERS
 const drawnItems = new L.FeatureGroup().addTo(map);
 const bufferGroup = L.layerGroup().addTo(map);
 
+// ✅ DRAW
 const drawControl = new L.Control.Draw({
   draw: {
     polygon: true,
     polyline: {
       shapeOptions: { color: '#d12b2b', weight: 3 }
     },
-    rectangle: false,
-    circle: false,
-    marker: false
+    rectangle:false,
+    circle:false,
+    marker:false
   },
-  edit: false
+  edit:false
 });
-
 map.addControl(drawControl);
 
 // ✅ DATA
@@ -171,28 +160,28 @@ function drawHex(hex){
 
   const hexLayer = L.polygon(boundary.map(p => [p[0], p[1]]), {
     pane: 'hexPane',
-    color: "#003366",
-    weight: 0.4,
-    fillColor: "#4a90e2",
-    fillOpacity: 0.6
+    color:"#003366",
+    weight:0.4,
+    fillColor:"#4a90e2",
+    fillOpacity:0.6
   }).addTo(map);
 
   hexLayers.push(hexLayer);
 }
 
-// ✅ POLYGON HANDLING
+// ✅ POLYGON
 function processPolygon(geo){
 
   hexLayers.forEach(l => map.removeLayer(l));
   hexLayers = [];
   selectedHexes.clear();
 
-  const expanded = turf.buffer(geo, 175, { units: 'meters' });
+  const expanded = turf.buffer(geo, 175, { units:'meters' });
 
-  const coords = expanded.geometry.coordinates[0].map(c => [c[1], c[0]]);
+  const coords = expanded.geometry.coordinates[0].map(c=>[c[1],c[0]]);
   const hexes = h3.polyfill([coords], 9);
 
-  hexes.forEach(h => {
+  hexes.forEach(h=>{
     selectedHexes.add(h);
     drawHex(h);
   });
@@ -200,7 +189,7 @@ function processPolygon(geo){
   updateUI();
 }
 
-// ✅ LINE HANDLING (FINAL VERSION)
+// ✅ LINE (FINAL CORRECT VERSION)
 function processLine(line){
 
   const bufferValue = parseFloat(buffer.value);
@@ -217,56 +206,52 @@ function processLine(line){
   hexLayers = [];
   selectedHexes.clear();
 
-  const length = turf.length(line, { units: 'kilometers' });
-  const step = 0.02; // ✅ consistent spacing
+  const length = turf.length(line, {units:'kilometers'});
+  const step = 0.02;
+
+  let rawHexes = new Set();
 
   for (let d = 0; d <= length; d += step){
-    const pt = turf.along(line, d, { units:'kilometers' });
-    const [lng, lat] = pt.geometry.coordinates;
-    const h = h3.geoToH3(lat, lng, 9);
-    selectedHexes.add(h);
+    const pt = turf.along(line, d, {units:'kilometers'});
+    const [lng,lat] = pt.geometry.coordinates;
+    rawHexes.add(h3.geoToH3(lat,lng,9));
+  }
 
-    const expanded = new Set([...finalHexes]);
+  let finalHexes = new Set();
 
-finalHexes.forEach(h => {
-  h3.kRing(h, 1).forEach(n => {
-    const center = h3.h3ToGeo(n);
+  rawHexes.forEach(h=>{
+    const center = h3.h3ToGeo(h);
     const pt = turf.point([center[1], center[0]]);
-    const dist = turf.pointToLineDistance(pt, line, { units: 'meters' });
+    const dist = turf.pointToLineDistance(pt, line, {units:'meters'});
 
-    if (dist <= bufferValue) {
-      expanded.add(n);
+    if (dist <= bufferValue){
+      finalHexes.add(h);
     }
   });
-});
 
-selectedHexes = expanded;
-   
-  }
+  // ✅ controlled expansion
+  let expanded = new Set([...finalHexes]);
 
-  const finalHexes = new Set();
+  finalHexes.forEach(h=>{
+    h3.kRing(h,1).forEach(n=>{
+      const center = h3.h3ToGeo(n);
+      const pt = turf.point([center[1], center[0]]);
+      const dist = turf.pointToLineDistance(pt,line,{units:'meters'});
 
-selectedHexes.forEach(h => {
+      if (dist <= bufferValue){
+        expanded.add(n);
+      }
+    });
+  });
 
-  const center = h3.h3ToGeo(h);
-  const pt = turf.point([center[1], center[0]]);
+  expanded.forEach(h=>drawHex(h));
 
-  const dist = turf.pointToLineDistance(pt, line, { units: 'meters' });
-
-  if (dist <= bufferValue) {
-    finalHexes.add(h);
-  }
-
-});
-
-  finalHexes.forEach(h => drawHex(h));
-
-  selectedHexes = finalHexes;
+  selectedHexes = expanded;
 
   updateUI();
 }
 
-// ✅ DRAW COMPLETE
+// ✅ DRAW EVENT
 map.on('draw:created', function(e){
 
   drawnItems.clearLayers();
@@ -296,3 +281,4 @@ map.on('draw:created', function(e){
 
 </body>
 </html>
+``
