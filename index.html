@@ -87,6 +87,7 @@ button.danger {
   <button id="finishBtn" class="secondary">Finish Drawing</button>
   <button id="clearBtn" class="danger">Clear</button>
 
+  <p>Selected Area: <span id="selectedArea">0.000</span> sq km</p>
   <p>Tiles: <span id="tileCount">0</span></p>
   <p>Quote: £<span id="quote">0</span></p>
 </div>
@@ -97,7 +98,7 @@ button.danger {
 document.addEventListener("DOMContentLoaded", function(){
 
   const H3_RESOLUTION = 9;
-  const EDGE_CANDIDATE_BUFFER_METRES = 140;
+  const EDGE_CANDIDATE_BUFFER_METRES = 500;
 
   const map = L.map('map').setView([52.48, -1.89], 13);
   map.doubleClickZoom.disable();
@@ -127,6 +128,7 @@ document.addEventListener("DOMContentLoaded", function(){
 
   const tileCount = document.getElementById("tileCount");
   const quote = document.getElementById("quote");
+  const selectedArea = document.getElementById("selectedArea");
   const bufferSelect = document.getElementById("buffer");
 
   function calculatePrice(count){
@@ -142,6 +144,16 @@ document.addEventListener("DOMContentLoaded", function(){
     quote.innerText = Math.round(calculatePrice(selectedHexes.size));
   }
 
+  function updateSelectedArea(geo){
+    const areaSqM = turf.area(geo);
+    const areaSqKm = areaSqM / 1000000;
+    selectedArea.innerText = areaSqKm.toFixed(3);
+  }
+
+  function resetSelectedArea(){
+    selectedArea.innerText = "0.000";
+  }
+
   function clearHexes(){
     hexLayers.forEach(layer => map.removeLayer(layer));
     hexLayers = [];
@@ -154,6 +166,7 @@ document.addEventListener("DOMContentLoaded", function(){
       map.removeLayer(currentSketchLayer);
       currentSketchLayer = null;
     }
+
     currentPoints = [];
     drawMode = null;
   }
@@ -172,6 +185,7 @@ document.addEventListener("DOMContentLoaded", function(){
     }
 
     clearHexes();
+    resetSelectedArea();
   }
 
   function drawHex(hex){
@@ -210,30 +224,31 @@ document.addEventListener("DOMContentLoaded", function(){
   }
 
   function getCandidateHexes(geo){
+    const candidates = new Set();
 
-  const candidates = new Set();
+    const searchBuffer = turf.buffer(geo, EDGE_CANDIDATE_BUFFER_METRES, {
+      units:'meters'
+    });
 
-  // Bigger safety margin around geometry so edge-intersecting hexes are considered
-  const searchBuffer = turf.buffer(geo, 750, {
-    units: 'meters'
-  });
+    const bbox = turf.bbox(searchBuffer);
 
-  const bbox = turf.bbox(searchBuffer);
+    const bboxPolygonCoords = [[
+      [bbox[0], bbox[1]],
+      [bbox[2], bbox[1]],
+      [bbox[2], bbox[3]],
+      [bbox[0], bbox[3]],
+      [bbox[0], bbox[1]]
+    ]];
 
-  const bboxPolygonCoords = [[
-    [bbox[0], bbox[1]],
-    [bbox[2], bbox[1]],
-    [bbox[2], bbox[3]],
-    [bbox[0], bbox[3]],
-    [bbox[0], bbox[1]]
-  ]];
+    const hexes = h3.polyfill(
+      bboxPolygonCoords,
+      H3_RESOLUTION,
+      true
+    );
 
-  const hexes = h3.polyfill(bboxPolygonCoords, H3_RESOLUTION, true);
+    hexes.forEach(h => candidates.add(h));
 
-  hexes.forEach(h => candidates.add(h));
-
-  return candidates;
- 
+    return candidates;
   }
 
   function selectIntersectingHexes(geo){
@@ -254,65 +269,57 @@ document.addEventListener("DOMContentLoaded", function(){
   }
 
   function redrawSketch(){
-
-  if(currentSketchLayer){
-    map.removeLayer(currentSketchLayer);
-    currentSketchLayer = null;
-  }
-
-  if(currentPoints.length === 0) return;
-
-  // ✅ LINE MODE
-  if(drawMode === "line"){
-
-    // Show first point as marker
-    if(currentPoints.length === 1){
-      currentSketchLayer = L.circleMarker(currentPoints[0], {
-        radius: 5,
-        color: '#d12b2b',
-        fillColor: '#d12b2b',
-        fillOpacity: 1
-      }).addTo(map);
+    if(currentSketchLayer){
+      map.removeLayer(currentSketchLayer);
+      currentSketchLayer = null;
     }
 
-    // Show line once 2 or more points exist
-    if(currentPoints.length > 1){
-      currentSketchLayer = L.polyline(currentPoints, {
-        color:'#d12b2b',
-        weight:3
-      }).addTo(map);
+    if(currentPoints.length === 0) return;
+
+    if(drawMode === "line"){
+      if(currentPoints.length === 1){
+        currentSketchLayer = L.circleMarker(currentPoints[0], {
+          radius:5,
+          color:'#d12b2b',
+          fillColor:'#d12b2b',
+          fillOpacity:1
+        }).addTo(map);
+      }
+
+      if(currentPoints.length > 1){
+        currentSketchLayer = L.polyline(currentPoints, {
+          color:'#d12b2b',
+          weight:3
+        }).addTo(map);
+      }
     }
-  }
 
-  // ✅ POLYGON MODE
-  if(drawMode === "polygon"){
+    if(drawMode === "polygon"){
+      if(currentPoints.length === 1){
+        currentSketchLayer = L.circleMarker(currentPoints[0], {
+          radius:5,
+          color:'#d12b2b',
+          fillColor:'#d12b2b',
+          fillOpacity:1
+        }).addTo(map);
+      }
 
-    if(currentPoints.length === 1){
-      currentSketchLayer = L.circleMarker(currentPoints[0], {
-        radius:5,
-        color:'#d12b2b',
-        fillColor:'#d12b2b',
-        fillOpacity:1
-      }).addTo(map);
-    }
-
-    if(currentPoints.length > 1){
-      currentSketchLayer = L.polygon(currentPoints, {
-        color:'#d12b2b',
-        weight:3,
-        fillColor:'#d12b2b',
-        fillOpacity:0.08
-      }).addTo(map);
+      if(currentPoints.length > 1){
+        currentSketchLayer = L.polygon(currentPoints, {
+          color:'#d12b2b',
+          weight:3,
+          fillColor:'#d12b2b',
+          fillOpacity:0.08
+        }).addTo(map);
+      }
     }
   }
-}
- 
+
   function startDrawing(mode){
-  clearAll();
-  drawMode = mode;
-  currentPoints = [];
-
-  console.log(mode + " drawing mode started");
+    clearAll();
+    drawMode = mode;
+    currentPoints = [];
+    console.log(mode + " drawing mode started");
   }
 
   function finishDrawing(){
@@ -339,6 +346,7 @@ document.addEventListener("DOMContentLoaded", function(){
 
       const geo = turf.polygon([ring]);
 
+      updateSelectedArea(geo);
       selectIntersectingHexes(geo);
     }
 
@@ -376,6 +384,7 @@ document.addEventListener("DOMContentLoaded", function(){
         }
       }).addTo(map);
 
+      updateSelectedArea(buffered);
       selectIntersectingHexes(buffered);
     }
 
