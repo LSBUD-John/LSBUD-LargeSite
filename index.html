@@ -193,23 +193,39 @@ function processGeometry(geo){
 
   let workingGeo = geo;
 
-  // ✅ ONLY expand if it came from a drawn polygon
+  // ✅ expand ONLY for real polygons
   if (geo.properties && geo.properties.source === "polygon") {
-    workingGeo = turf.buffer(geo, 185, { units: 'meters' });
+    workingGeo = turf.buffer(geo, 175, { units: 'meters' });
   }
 
-  const coords = workingGeo.geometry.coordinates[0].map(c => [c[1], c[0]]);
+  let polygons = [];
 
-  const hexes = h3.polyfill([coords], 9);
+  // ✅ HANDLE BOTH TYPES
+  if (workingGeo.geometry.type === "Polygon") {
+    polygons = [workingGeo.geometry.coordinates];
+  }
 
-  hexes.forEach(h => {
-    selectedHexes.add(h);
-    drawHex(h);
+  if (workingGeo.geometry.type === "MultiPolygon") {
+    polygons = workingGeo.geometry.coordinates;
+  }
+
+  // ✅ PROCESS ALL RINGS
+  polygons.forEach(polygon => {
+
+    const coords = polygon[0].map(c => [c[1], c[0]]);
+
+    const hexes = h3.polyfill([coords], 9);
+
+    hexes.forEach(h => {
+      selectedHexes.add(h);
+      drawHex(h);
+    });
+
   });
 
   updateUI();
 }
- 
+  
 // ✅ BUFFER UI CONTROL
 map.on('draw:drawstart', function(e){
   bufferSection.style.display = (e.layerType === "polyline") ? "block" : "none";
@@ -226,7 +242,7 @@ map.on('draw:created', function(e){
 layer.setStyle({
   color: "#d12b2b",       // ✅ red outline
   weight: 3,
-  fillOpacity: 0.05       // ✅ very light fill
+  fillOpacity: 0.6       // ✅ very light fill
 });
 
 layer.bringToFront();     // ✅ keep boundary visible
