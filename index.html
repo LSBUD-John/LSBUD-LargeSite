@@ -45,22 +45,20 @@ button {
   border-radius:4px;
 }
 
-/* ✅ Lighter greyscale */
 .leaflet-tile-pane {
   filter: grayscale(85%) brightness(96%);
 }
 </style>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
-<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js" defer></script>
-<script src="https://unpkg.com/@turf/turf@6/turf.min.js" defer></script>
-<script src="https://unpkg.com/h3-js@3.7.2/dist/h3-js.umd.js" defer></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+<script src="https://unpkg.com/h3-js@3.7.2/dist/h3-js.umd.js"></script>
 </head>
 
 <body>
 
 <div id="panel">
-
 <h3>Search</h3>
 
 <div class="section">
@@ -68,7 +66,7 @@ button {
 <button onclick="searchLocation()">Find</button>
 </div>
 
-<div class="section" id="bufferSection">
+<div class="section">
 <label>Buffer (line only)</label>
 <select id="buffer">
 <option value="25">25m</option>
@@ -82,7 +80,6 @@ button {
 <p>Quote: £<span id="quote">0</span></p>
 
 <button id="clearBtn">Clear Selection</button>
-
 </div>
 
 <div id="map"></div>
@@ -93,7 +90,7 @@ document.addEventListener("DOMContentLoaded", function(){
 // ✅ MAP
 const map = L.map('map').setView([52.48, -1.89], 13);
 
-// ✅ CREATE HEX PANE (THIS FIXES EVERYTHING)
+// ✅ HEX PANE
 map.createPane('hexPane');
 map.getPane('hexPane').style.zIndex = 650;
 
@@ -108,21 +105,23 @@ const panel = document.getElementById("panel");
 L.DomEvent.disableClickPropagation(panel);
 L.DomEvent.disableScrollPropagation(panel);
 
-// ✅ LAYERS
+// ✅ DRAW TOOL
 const drawnItems = new L.FeatureGroup().addTo(map);
 const bufferGroup = L.layerGroup().addTo(map);
 
-// ✅ DRAW TOOL
 const drawControl = new L.Control.Draw({
   draw: {
-    polygon:true,
-    polyline:true,
-    rectangle:false,
-    circle:false,
-    marker:false
+    polygon: true,
+    polyline: {
+      shapeOptions: { color: '#d12b2b', weight: 3 }
+    },
+    rectangle: false,
+    circle: false,
+    marker: false
   },
-  edit:false
+  edit: false
 });
+
 map.addControl(drawControl);
 
 // ✅ DATA
@@ -138,14 +137,13 @@ function calculatePrice(count){
   return (count*0.49).toFixed(0);
 }
 
-// ✅ UI
 function updateUI(){
   tileCount.innerText = selectedHexes.size;
   quote.innerText = calculatePrice(selectedHexes.size);
 }
 
 // ✅ CLEAR
-function clearAll(){
+clearBtn.onclick = function(){
   drawnItems.clearLayers();
   bufferGroup.clearLayers();
   hexLayers.forEach(l => map.removeLayer(l));
@@ -153,27 +151,26 @@ function clearAll(){
   selectedHexes.clear();
   updateUI();
 }
-clearBtn.onclick = clearAll;
 
 // ✅ SEARCH
 window.searchLocation = function(){
   const query = searchBox.value;
 
-fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}`)
-     .then(res => res.json())
+  fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}`)
+    .then(res => res.json())
     .then(data => {
-      if(!data.length) return;
+      if (!data.length) return;
       map.setView([data[0].lat, data[0].lon], 15);
       L.marker([data[0].lat, data[0].lon]).addTo(map);
     });
 }
 
-// ✅ DRAW HEX — ALWAYS ON TOP
+// ✅ DRAW HEX
 function drawHex(hex){
   const boundary = h3.h3ToGeoBoundary(hex, false);
 
   const hexLayer = L.polygon(boundary.map(p => [p[0], p[1]]), {
-    pane: 'hexPane',        // ✅ THIS IS THE KEY FIX 
+    pane: 'hexPane',
     color: "#003366",
     weight: 0.4,
     fillColor: "#4a90e2",
@@ -183,53 +180,67 @@ function drawHex(hex){
   hexLayers.push(hexLayer);
 }
 
-// ✅ PROCESS
-function processGeometry(geo){
+// ✅ POLYGON HANDLING
+function processPolygon(geo){
 
-  // clear previous
   hexLayers.forEach(l => map.removeLayer(l));
   hexLayers = [];
   selectedHexes.clear();
 
-  let workingGeo = geo;
+  const expanded = turf.buffer(geo, 100, { units: 'meters' });
 
-  // ✅ expand ONLY for real polygons
-  if (geo.properties && geo.properties.source === "polygon") {
-    workingGeo = turf.buffer(geo, 175, { units: 'meters' });
-  }
+  const coords = expanded.geometry.coordinates[0].map(c => [c[1], c[0]]);
+  const hexes = h3.polyfill([coords], 9);
 
-  let polygons = [];
-
-  // ✅ HANDLE BOTH TYPES
-  if (workingGeo.geometry.type === "Polygon") {
-    polygons = [workingGeo.geometry.coordinates];
-  }
-
-  if (workingGeo.geometry.type === "MultiPolygon") {
-    polygons = workingGeo.geometry.coordinates;
-  }
-
-  // ✅ PROCESS ALL RINGS
-  polygons.forEach(polygon => {
-
-    const coords = polygon[0].map(c => [c[1], c[0]]);
-
-    const hexes = h3.polyfill([coords], 9);
-
-    hexes.forEach(h => {
-      selectedHexes.add(h);
-      drawHex(h);
-    });
-
+  hexes.forEach(h => {
+    selectedHexes.add(h);
+    drawHex(h);
   });
 
   updateUI();
 }
-  
-// ✅ BUFFER UI CONTROL
-map.on('draw:drawstart', function(e){
-  bufferSection.style.display = (e.layerType === "polyline") ? "block" : "none";
-});
+
+// ✅ LINE HANDLING (FINAL VERSION)
+function processLine(line){
+
+  const bufferValue = parseFloat(buffer.value);
+
+  const buffered = turf.buffer(line, bufferValue, { units:'meters' });
+
+  bufferGroup.clearLayers();
+
+  L.geoJSON(buffered, {
+    style:{ color:"#d12b2b", weight:2, fillOpacity:0.25 }
+  }).addTo(bufferGroup);
+
+  hexLayers.forEach(l => map.removeLayer(l));
+  hexLayers = [];
+  selectedHexes.clear();
+
+  const length = turf.length(line, { units: 'kilometers' });
+  const step = 0.02; // ✅ consistent spacing
+
+  for (let d = 0; d <= length; d += step){
+    const pt = turf.along(line, d, { units:'kilometers' });
+    const [lng, lat] = pt.geometry.coordinates;
+    const h = h3.geoToH3(lat, lng, 9);
+    selectedHexes.add(h);
+  }
+
+  const finalHexes = new Set([...selectedHexes]);
+
+  let rings = Math.max(0, Math.floor(bufferValue / 60));
+
+  selectedHexes.forEach(h => {
+    h3.kRing(h, rings).forEach(x => finalHexes.add(x));
+  });
+
+  finalHexes.forEach(h => drawHex(h));
+
+  selectedHexes = finalHexes;
+
+  updateUI();
+}
 
 // ✅ DRAW COMPLETE
 map.on('draw:created', function(e){
@@ -238,79 +249,25 @@ map.on('draw:created', function(e){
   bufferGroup.clearLayers();
 
   const layer = e.layer;
-  
-layer.setStyle({
-  color: "#d12b2b",       // ✅ red outline
-  weight: 3,
-  fillOpacity: 0.6       // ✅ very light fill
-});
 
-layer.bringToFront();     // ✅ keep boundary visible
-  drawnItems.addLayer(layer);
- 
-  if(e.layerType === "polygon"){
-    const geo = layer.toGeoJSON();
-    geo.properties = { source: "polygon" };
-    
-    processGeometry(geo);
-  }
- 
-  if(e.layerType === "polyline"){
-
-  const bufferValue = parseFloat(document.getElementById("buffer").value);
-
-  const line = layer.toGeoJSON();
-
-  // ✅ Buffer (for visual only)
-  const buffered = turf.buffer(line, bufferValue, { units:'meters' });
-
-  L.geoJSON(buffered, {
-    style: {
-      color:"#d12b2b",
-      weight:2,
-      fillOpacity:0.25
-    }
-  }).addTo(bufferGroup);
-
-  // ✅ NEW APPROACH: sample along line
-  const length = turf.length(line, { units: 'kilometers' });
-
-  const step = bufferValue / 1000; // spacing based on buffer
-
-  hexLayers.forEach(l => map.removeLayer(l));
-  hexLayers = [];
-  selectedHexes.clear();
-
-  for (let d = 0; d <= length; d += step) {
-
-    const point = turf.along(line, d, { units: 'kilometers' });
-    const [lng, lat] = point.geometry.coordinates;
-
-    const hex = h3.geoToH3(lat, lng, 9);
-
-    selectedHexes.add(hex);
-  }
-
-  // ✅ Expand around each hex (fills width)
-  const finalHexes = new Set([...selectedHexes]);
-
-  selectedHexes.forEach(h => {
-    const ring = h3.kRing(h, 2);  // 👈 KEY LINE
-    ring.forEach(x => finalHexes.add(x));
+  layer.setStyle({
+    color:"#d12b2b",
+    weight:3,
+    fillOpacity:0.05
   });
 
-  finalHexes.forEach(h => drawHex(h));
+  drawnItems.addLayer(layer);
 
-  selectedHexes = finalHexes;
+  if (e.layerType === "polygon"){
+    processPolygon(layer.toGeoJSON());
+  }
 
-  updateUI();
-  
-}   // ✅ CLOSES polyline IF
+  if (e.layerType === "polyline"){
+    processLine(layer.toGeoJSON());
+  }
+});
 
-});  // ✅ CLOSES map.on
-
-});  // ✅ CLOSES DOMContentLoaded
-  
+});
 </script>
 
 </body>
