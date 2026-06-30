@@ -21,7 +21,7 @@ body {
   position:absolute;
   top:20px;
   right:20px;
-  width:290px;
+  width:300px;
   padding:16px;
   background:white;
   z-index:9999;
@@ -56,6 +56,18 @@ button.danger {
   background:#d12b2b;
 }
 
+button.activeDraw {
+  background:#004578;
+  outline:3px solid #80c7ff;
+}
+
+#modeStatus {
+  font-size:13px;
+  font-weight:600;
+  color:#004578;
+  margin:6px 0 12px 0;
+}
+
 .leaflet-tile-pane {
   filter: grayscale(85%) brightness(96%);
 }
@@ -76,7 +88,7 @@ button.danger {
 
   <label>Buffer for line</label>
   <select id="buffer">
-    <option value="25">25m</option>
+    <option value="25" selected>25m</option>
     <option value="50">50m</option>
     <option value="75">75m</option>
     <option value="100">100m</option>
@@ -86,6 +98,8 @@ button.danger {
   <button id="drawLineBtn">Draw Line</button>
   <button id="finishBtn" class="secondary">Finish Drawing</button>
   <button id="clearBtn" class="danger">Clear</button>
+
+  <div id="modeStatus">No drawing mode selected</div>
 
   <p>Selected Area: <span id="selectedArea">0.000</span> sq km</p>
   <p>Tiles: <span id="tileCount">0</span></p>
@@ -126,10 +140,16 @@ document.addEventListener("DOMContentLoaded", function(){
   let hexLayers = [];
   let selectedHexes = new Set();
 
+  let lastLineGeo = null;
+
   const tileCount = document.getElementById("tileCount");
   const quote = document.getElementById("quote");
   const selectedArea = document.getElementById("selectedArea");
   const bufferSelect = document.getElementById("buffer");
+
+  const drawPolygonBtn = document.getElementById("drawPolygonBtn");
+  const drawLineBtn = document.getElementById("drawLineBtn");
+  const modeStatus = document.getElementById("modeStatus");
 
   function calculatePrice(count){
     if(count <= 50) return count * 2.99;
@@ -154,6 +174,21 @@ document.addEventListener("DOMContentLoaded", function(){
     selectedArea.innerText = "0.000";
   }
 
+  function updateModeUI(){
+    drawPolygonBtn.classList.remove("activeDraw");
+    drawLineBtn.classList.remove("activeDraw");
+
+    if(drawMode === "polygon"){
+      drawPolygonBtn.classList.add("activeDraw");
+      modeStatus.innerText = "Polygon mode active — click points, then Finish Drawing.";
+    } else if(drawMode === "line"){
+      drawLineBtn.classList.add("activeDraw");
+      modeStatus.innerText = "Line mode active — click points, then Finish Drawing.";
+    } else {
+      modeStatus.innerText = "No drawing mode selected";
+    }
+  }
+
   function clearHexes(){
     hexLayers.forEach(layer => map.removeLayer(layer));
     hexLayers = [];
@@ -169,6 +204,7 @@ document.addEventListener("DOMContentLoaded", function(){
 
     currentPoints = [];
     drawMode = null;
+    updateModeUI();
   }
 
   function clearAll(){
@@ -183,6 +219,8 @@ document.addEventListener("DOMContentLoaded", function(){
       map.removeLayer(bufferLayer);
       bufferLayer = null;
     }
+
+    lastLineGeo = null;
 
     clearHexes();
     resetSelectedArea();
@@ -209,18 +247,6 @@ document.addEventListener("DOMContentLoaded", function(){
     ring.push(ring[0]);
 
     return turf.polygon([ring]);
-  }
-
-  function polygonsFromGeometry(geometry){
-    if(geometry.type === "Polygon"){
-      return [geometry.coordinates];
-    }
-
-    if(geometry.type === "MultiPolygon"){
-      return geometry.coordinates;
-    }
-
-    return [];
   }
 
   function getCandidateHexes(geo){
@@ -266,6 +292,31 @@ document.addEventListener("DOMContentLoaded", function(){
     });
 
     updateUI();
+  }
+
+  function renderLineSelection(lineGeo){
+    if(bufferLayer){
+      map.removeLayer(bufferLayer);
+      bufferLayer = null;
+    }
+
+    const bufferValue = parseFloat(bufferSelect.value);
+
+    const buffered = turf.buffer(lineGeo, bufferValue, {
+      units:'meters'
+    });
+
+    bufferLayer = L.geoJSON(buffered, {
+      style:{
+        color:'#d12b2b',
+        weight:2,
+        fillColor:'#d12b2b',
+        fillOpacity:0.18
+      }
+    }).addTo(map);
+
+    updateSelectedArea(buffered);
+    selectIntersectingHexes(buffered);
   }
 
   function redrawSketch(){
@@ -319,7 +370,7 @@ document.addEventListener("DOMContentLoaded", function(){
     clearAll();
     drawMode = mode;
     currentPoints = [];
-    console.log(mode + " drawing mode started");
+    updateModeUI();
   }
 
   function finishDrawing(){
@@ -346,6 +397,8 @@ document.addEventListener("DOMContentLoaded", function(){
 
       const geo = turf.polygon([ring]);
 
+      lastLineGeo = null;
+
       updateSelectedArea(geo);
       selectIntersectingHexes(geo);
     }
@@ -369,27 +422,14 @@ document.addEventListener("DOMContentLoaded", function(){
       const coords = currentPoints.map(p => [p.lng, p.lat]);
       const line = turf.lineString(coords);
 
-      const bufferValue = parseFloat(bufferSelect.value);
+      lastLineGeo = line;
 
-      const buffered = turf.buffer(line, bufferValue, {
-        units:'meters'
-      });
-
-      bufferLayer = L.geoJSON(buffered, {
-        style:{
-          color:'#d12b2b',
-          weight:2,
-          fillColor:'#d12b2b',
-          fillOpacity:0.18
-        }
-      }).addTo(map);
-
-      updateSelectedArea(buffered);
-      selectIntersectingHexes(buffered);
+      renderLineSelection(line);
     }
 
     drawMode = null;
     currentPoints = [];
+    updateModeUI();
   }
 
   map.on("click", function(e){
@@ -406,11 +446,11 @@ document.addEventListener("DOMContentLoaded", function(){
     finishDrawing();
   });
 
-  document.getElementById("drawPolygonBtn").onclick = function(){
+  drawPolygonBtn.onclick = function(){
     startDrawing("polygon");
   };
 
-  document.getElementById("drawLineBtn").onclick = function(){
+  drawLineBtn.onclick = function(){
     startDrawing("line");
   };
 
@@ -420,6 +460,12 @@ document.addEventListener("DOMContentLoaded", function(){
 
   document.getElementById("clearBtn").onclick = function(){
     clearAll();
+  };
+
+  bufferSelect.onchange = function(){
+    if(lastLineGeo){
+      renderLineSelection(lastLineGeo);
+    }
   };
 
   document.getElementById("findBtn").onclick = function(){
@@ -442,6 +488,8 @@ document.addEventListener("DOMContentLoaded", function(){
         searchMarker = L.marker([lat, lon]).addTo(map);
       });
   };
+
+  updateModeUI();
 
 });
 </script>
