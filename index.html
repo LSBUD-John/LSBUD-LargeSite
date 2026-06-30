@@ -210,20 +210,30 @@ document.addEventListener("DOMContentLoaded", function(){
   }
 
   function getCandidateHexes(geo){
-    const candidates = new Set();
 
-    const expanded = turf.buffer(geo, EDGE_CANDIDATE_BUFFER_METRES, {
-      units:'meters'
-    });
+  const candidates = new Set();
 
-    const polygons = polygonsFromGeometry(expanded.geometry);
+  // Bigger safety margin around geometry so edge-intersecting hexes are considered
+  const searchBuffer = turf.buffer(geo, 750, {
+    units: 'meters'
+  });
 
-    polygons.forEach(polyCoords => {
-      const hexes = h3.polyfill(polyCoords, H3_RESOLUTION, true);
-      hexes.forEach(h => candidates.add(h));
-    });
+  const bbox = turf.bbox(searchBuffer);
 
-    return candidates;
+  const bboxPolygonCoords = [[
+    [bbox[0], bbox[1]],
+    [bbox[2], bbox[1]],
+    [bbox[2], bbox[3]],
+    [bbox[0], bbox[3]],
+    [bbox[0], bbox[1]]
+  ]];
+
+  const hexes = h3.polyfill(bboxPolygonCoords, H3_RESOLUTION, true);
+
+  hexes.forEach(h => candidates.add(h));
+
+  return candidates;
+ 
   }
 
   function selectIntersectingHexes(geo){
