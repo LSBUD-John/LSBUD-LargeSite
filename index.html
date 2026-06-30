@@ -256,11 +256,14 @@ layer.bringToFront();     // ✅ keep boundary visible
   }
  
   if(e.layerType === "polyline"){
-  
-  const bufferValue = parseFloat(document.getElementById("buffer").value);
-  const buffered = turf.buffer(layer.toGeoJSON(), bufferValue, { units:'meters' });
 
-  // ✅ Draw buffer
+  const bufferValue = parseFloat(document.getElementById("buffer").value);
+
+  const line = layer.toGeoJSON();
+
+  // ✅ Buffer (for visual only)
+  const buffered = turf.buffer(line, bufferValue, { units:'meters' });
+
   L.geoJSON(buffered, {
     style: {
       color:"#d12b2b",
@@ -269,8 +272,39 @@ layer.bringToFront();     // ✅ keep boundary visible
     }
   }).addTo(bufferGroup);
 
-processGeometry(buffered);
+  // ✅ NEW APPROACH: sample along line
+  const length = turf.length(line, { units: 'kilometers' });
 
+  const step = bufferValue / 1000; // spacing based on buffer
+
+  hexLayers.forEach(l => map.removeLayer(l));
+  hexLayers = [];
+  selectedHexes.clear();
+
+  for (let d = 0; d <= length; d += step) {
+
+    const point = turf.along(line, d, { units: 'kilometers' });
+    const [lng, lat] = point.geometry.coordinates;
+
+    const hex = h3.geoToH3(lat, lng, 9);
+
+    selectedHexes.add(hex);
+  }
+
+  // ✅ Expand around each hex (fills width)
+  const finalHexes = new Set([...selectedHexes]);
+
+  selectedHexes.forEach(h => {
+    const ring = h3.kRing(h, 2);  // 👈 KEY LINE
+    ring.forEach(x => finalHexes.add(x));
+  });
+
+  finalHexes.forEach(h => drawHex(h));
+
+  selectedHexes = finalHexes;
+
+  updateUI();
+  
 }   // ✅ CLOSES polyline IF
 
 });  // ✅ CLOSES map.on
