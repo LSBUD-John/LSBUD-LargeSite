@@ -225,15 +225,39 @@ function processLine(line){
     const [lng, lat] = pt.geometry.coordinates;
     const h = h3.geoToH3(lat, lng, 9);
     selectedHexes.add(h);
+
+    const expanded = new Set([...finalHexes]);
+
+finalHexes.forEach(h => {
+  h3.kRing(h, 1).forEach(n => {
+    const center = h3.h3ToGeo(n);
+    const pt = turf.point([center[1], center[0]]);
+    const dist = turf.pointToLineDistance(pt, line, { units: 'meters' });
+
+    if (dist <= bufferValue) {
+      expanded.add(n);
+    }
+  });
+});
+
+selectedHexes = expanded;
+   
   }
 
-  const finalHexes = new Set([...selectedHexes]);
+  const finalHexes = new Set();
 
-  let rings = Math.max(0, Math.floor(bufferValue / 60));
+selectedHexes.forEach(h => {
 
-  selectedHexes.forEach(h => {
-    h3.kRing(h, rings).forEach(x => finalHexes.add(x));
-  });
+  const center = h3.h3ToGeo(h);
+  const pt = turf.point([center[1], center[0]]);
+
+  const dist = turf.pointToLineDistance(pt, line, { units: 'meters' });
+
+  if (dist <= bufferValue) {
+    finalHexes.add(h);
+  }
+
+});
 
   finalHexes.forEach(h => drawHex(h));
 
