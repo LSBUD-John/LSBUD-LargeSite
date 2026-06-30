@@ -9,7 +9,7 @@
 
 <style>
 body { margin:0; font-family: Arial; }
-#map { height:100vh; width:100%; }
+#map { height:100vh; }
 
 #panel {
   position:absolute;
@@ -20,14 +20,10 @@ body { margin:0; font-family: Arial; }
   background:white;
   z-index:9999;
   border-radius:8px;
-  box-shadow:0 0 12px rgba(0,0,0,0.2);
+  box-shadow:0 0 10px rgba(0,0,0,0.2);
 }
 
-input, select {
-  width:100%;
-  padding:8px;
-  margin-bottom:10px;
-}
+input, select { width:100%; margin-bottom:10px; padding:6px; }
 
 button {
   width:100%;
@@ -35,7 +31,6 @@ button {
   background:#0078d4;
   color:white;
   border:none;
-  cursor:pointer;
   border-radius:4px;
 }
 
@@ -53,12 +48,11 @@ button {
 <body>
 
 <div id="panel">
-
 <h3>Search</h3>
-<input id="searchBox" placeholder="Search address">
+<input id="searchBox">
 <button onclick="searchLocation()">Find</button>
 
-<label>Buffer (line only)</label>
+<label>Buffer</label>
 <select id="buffer">
 <option value="25">25m</option>
 <option value="50">50m</option>
@@ -69,8 +63,7 @@ button {
 <p>Tiles: <span id="tileCount">0</span></p>
 <p>Quote: £<span id="quote">0</span></p>
 
-<button id="clearBtn">Clear Selection</button>
-
+<button onclick="clearAll()">Clear</button>
 </div>
 
 <div id="map"></div>
@@ -78,33 +71,25 @@ button {
 <script>
 document.addEventListener("DOMContentLoaded", function(){
 
-// ✅ MAP
 const map = L.map('map').setView([52.48, -1.89], 13);
 
-// ✅ IMPORTANT FIX: stop zoom interfering with draw finish
+// ✅ critical fix
 map.doubleClickZoom.disable();
 
-// ✅ HEX PANE
 map.createPane('hexPane');
 map.getPane('hexPane').style.zIndex = 650;
 
-// ✅ BASEMAP
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19,
-  attribution: '&copy; OpenStreetMap contributors | LSBUD'
+  attribution:'&copy; OpenStreetMap | LSBUD'
 }).addTo(map);
 
-// ✅ LAYERS
 const drawnItems = new L.FeatureGroup().addTo(map);
 const bufferGroup = L.layerGroup().addTo(map);
 
-// ✅ DRAW
 const drawControl = new L.Control.Draw({
-  draw: {
-    polygon: true,
-    polyline: {
-      shapeOptions: { color: '#d12b2b', weight: 3 }
-    },
+  draw:{
+    polygon:true,
+    polyline:true,
     rectangle:false,
     circle:false,
     marker:false
@@ -113,73 +98,53 @@ const drawControl = new L.Control.Draw({
 });
 map.addControl(drawControl);
 
-// ✅ DATA
-let selectedHexes = new Set();
-let hexLayers = [];
+// ✅ data
+let hexLayers=[];
+let selectedHexes=new Set();
 
-// ✅ PRICING
-function calculatePrice(count){
-  if (count <= 50) return (count*2.99).toFixed(0);
-  if (count <= 100) return (count*2.5).toFixed(0);
-  if (count <= 200) return (count*1.5).toFixed(0);
-  if (count <= 500) return (count*0.99).toFixed(0);
-  return (count*0.49).toFixed(0);
+// ✅ pricing
+function price(n){
+  if(n<=50) return n*2.99;
+  if(n<=100) return n*2.5;
+  if(n<=200) return n*1.5;
+  if(n<=500) return n*0.99;
+  return n*0.49;
 }
 
 function updateUI(){
-  tileCount.innerText = selectedHexes.size;
-  quote.innerText = calculatePrice(selectedHexes.size);
+  tileCount.innerText=selectedHexes.size;
+  quote.innerText=price(selectedHexes.size).toFixed(0);
 }
 
-// ✅ CLEAR
-clearBtn.onclick = function(){
-  drawnItems.clearLayers();
-  bufferGroup.clearLayers();
-  hexLayers.forEach(l => map.removeLayer(l));
-  hexLayers = [];
-  selectedHexes.clear();
-  updateUI();
-}
-
-// ✅ SEARCH
-window.searchLocation = function(){
-  const query = searchBox.value;
-
-  fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}`)
-    .then(res => res.json())
-    .then(data => {
-      if (!data.length) return;
-      map.setView([data[0].lat, data[0].lon], 15);
-      L.marker([data[0].lat, data[0].lon]).addTo(map);
-    });
-}
-
-// ✅ DRAW HEX
-function drawHex(hex){
-  const boundary = h3.h3ToGeoBoundary(hex, false);
-
-  const hexLayer = L.polygon(boundary.map(p => [p[0], p[1]]), {
-    pane: 'hexPane',
+function drawHex(h){
+  const coords=h3.h3ToGeoBoundary(h,false);
+  const poly=L.polygon(coords.map(c=>[c[0],c[1]]),{
+    pane:"hexPane",
     color:"#003366",
     weight:0.4,
     fillColor:"#4a90e2",
     fillOpacity:0.6
   }).addTo(map);
-
-  hexLayers.push(hexLayer);
+  hexLayers.push(poly);
 }
 
-// ✅ POLYGON
-function processPolygon(geo){
-
-  hexLayers.forEach(l => map.removeLayer(l));
-  hexLayers = [];
+function clearAll(){
+  drawnItems.clearLayers();
+  bufferGroup.clearLayers();
+  hexLayers.forEach(l=>map.removeLayer(l));
+  hexLayers=[];
   selectedHexes.clear();
+  updateUI();
+}
 
-  const expanded = turf.buffer(geo, 175, { units:'meters' });
+// ✅ polygon
+function handlePolygon(geo){
 
-  const coords = expanded.geometry.coordinates[0].map(c=>[c[1],c[0]]);
-  const hexes = h3.polyfill([coords], 9);
+  clearAll();
+
+  const expanded=turf.buffer(geo,180,{units:'meters'});
+  const coords=expanded.geometry.coordinates[0].map(c=>[c[1],c[0]]);
+  const hexes=h3.polyfill([coords],9);
 
   hexes.forEach(h=>{
     selectedHexes.add(h);
@@ -189,111 +154,79 @@ function processPolygon(geo){
   updateUI();
 }
 
-// ✅ LINE (FINAL CORRECT VERSION)
-function processLine(line){
- 
-  const bufferValue = parseFloat(buffer.value);
+// ✅ line (correct solution)
+function handleLine(line){
 
-  // ✅ draw visual buffer
-  const buffered = turf.buffer(line, bufferValue, { units:'meters' });
+  clearAll();
 
-  bufferGroup.clearLayers();
+  const bufferVal=parseFloat(buffer.value);
 
-  L.geoJSON(buffered, {
-    style:{ color:"#d12b2b", weight:2, fillOpacity:0.25 }
+  const buffered=turf.buffer(line,bufferVal,{units:'meters'});
+
+  L.geoJSON(buffered,{
+    style:{color:'#d12b2b',weight:2,fillOpacity:0.2}
   }).addTo(bufferGroup);
 
-  // ✅ reset
-  hexLayers.forEach(l => map.removeLayer(l));
-  hexLayers = [];
-  selectedHexes.clear();
+  const bbox=turf.bbox(buffered);
+  const hexes=h3.polyfill([
+    [
+      [bbox[0],bbox[1]],
+      [bbox[2],bbox[1]],
+      [bbox[2],bbox[3]],
+      [bbox[0],bbox[3]],
+      [bbox[0],bbox[1]]
+    ]
+  ],9);
 
-  const length = turf.length(line, {units:'kilometers'});
+  hexes.forEach(h=>{
+    const center=h3.h3ToGeo(h);
+    const pt=turf.point([center[1],center[0]]);
 
-  // ✅ dense sampling = smoother corridor
-  const step = 0.02;
-
-  let rawHexes = new Set();
-
-  // ✅ STEP 1: sample line
-  for (let d = 0; d <= length; d += step){
-    const pt = turf.along(line, d, {units:'kilometers'});
-    const [lng, lat] = pt.geometry.coordinates;
-    rawHexes.add(h3.geoToH3(lat, lng, 9));
-  }
-
-  // ✅ STEP 2: filter by distance (TRUE buffer match)
-  let filteredHexes = new Set();
-
-  rawHexes.forEach(h => {
-    const center = h3.h3ToGeo(h);
-    const pt = turf.point([center[1], center[0]]);
-    const dist = turf.pointToLineDistance(pt, line, {units:'meters'});
-
-    if (dist <= bufferValue){
-      filteredHexes.add(h);
+    if(turf.booleanPointInPolygon(pt,buffered)){
+      selectedHexes.add(h);
+      drawHex(h);
     }
   });
 
-  // ✅ STEP 3: minimal expansion to fill gaps (controlled)
-  let finalHexes = new Set([...filteredHexes]);
-
-  filteredHexes.forEach(h => {
-    h3.kRing(h, 1).forEach(n => {
-      const center = h3.h3ToGeo(n);
-      const pt = turf.point([center[1], center[0]]);
-      const dist = turf.pointToLineDistance(pt, line, {units:'meters'});
-
-      if (dist <= bufferValue){
-        finalHexes.add(n);
-      }
-    });
-  });
-
-  // ✅ DRAW
-  finalHexes.forEach(h => drawHex(h));
-
-  selectedHexes = finalHexes;
-  
   updateUI();
 }
 
-// ✅ DRAW EVENT
-map.on('draw:created', function(e){
+// ✅ draw complete
+map.on('draw:created',function(e){
 
-  drawnItems.clearLayers();
-  bufferGroup.clearLayers();
-
-  const layer = e.layer;
-
-  layer.setStyle({
-    color:"#d12b2b",
-    weight:3,
-    fillOpacity:0.05
-  });
+  const layer=e.layer;
 
   drawnItems.addLayer(layer);
 
-  if (e.layerType === "polygon"){
-    processPolygon(layer.toGeoJSON());
+  if(e.layerType==="polygon"){
+    handlePolygon(layer.toGeoJSON());
   }
 
-  if (e.layerType === "polyline"){
-      
-const latlngs = layer.getLatLngs();
+  if(e.layerType==="polyline"){
+    const pts=layer.getLatLngs();
 
-  // ✅ REQUIRE at least 3 points (2 segments)
-  if (latlngs.length < 3) {
-    return;
+    // ✅ require real line
+    if(pts.length<2) return;
+
+    handleLine(layer.toGeoJSON());
   }
 
-  processLine(layer.toGeoJSON());
- }
 });
+
+// ✅ search
+window.searchLocation=function(){
+
+  fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${searchBox.value}`)
+    .then(r=>r.json())
+    .then(d=>{
+      if(!d.length) return;
+      map.setView([d[0].lat,d[0].lon],15);
+    });
+
+}
 
 });
 </script>
 
 </body>
 </html>
-``
