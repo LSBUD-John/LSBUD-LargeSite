@@ -187,7 +187,7 @@ function processPolygon(geo){
   hexLayers = [];
   selectedHexes.clear();
 
-  const expanded = turf.buffer(geo, 100, { units: 'meters' });
+  const expanded = turf.buffer(geo, 175, { units: 'meters' });
 
   const coords = expanded.geometry.coordinates[0].map(c => [c[1], c[0]]);
   const hexes = h3.polyfill([coords], 9);
