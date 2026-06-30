@@ -154,12 +154,20 @@ function handlePolygon(geo){
   hexLayers = [];
   selectedHexes.clear();
 
-  const coords = geo.geometry.coordinates[0].map(c=>[c[1],c[0]]);
+  const coords = geo.geometry.coordinates[0].map(c => [c[1],c[0]]);
   const hexes = h3.polyfill([coords],9);
 
-  hexes.forEach(h=>{
-    selectedHexes.add(h);
-    drawHex(h);
+  hexes.forEach(h => {
+
+    const center = h3.h3ToGeo(h);
+    const pt = turf.point([center[1], center[0]]);
+
+    // ✅ ONLY keep hexes actually inside polygon
+    if (turf.booleanPointInPolygon(pt, geo)) {
+      selectedHexes.add(h);
+      drawHex(h);
+    }
+
   });
 
   updateUI();
@@ -182,12 +190,34 @@ function handleLine(line){
     style:{color:'#d12b2b',weight:2,fillOpacity:0.2}
   }).addTo(bufferGroup);
 
-  const coords = buffered.geometry.coordinates[0].map(c=>[c[1],c[0]]);
-  const hexes = h3.polyfill([coords],9);
+  // ✅ handle BOTH Polygon + MultiPolygon
+  let polygons = [];
 
-  hexes.forEach(h=>{
-    selectedHexes.add(h);
-    drawHex(h);
+  if (buffered.geometry.type === "Polygon") {
+    polygons = [buffered.geometry.coordinates];
+  }
+
+  if (buffered.geometry.type === "MultiPolygon") {
+    polygons = buffered.geometry.coordinates;
+  }
+
+  polygons.forEach(polygon => {
+
+    const coords = polygon[0].map(c => [c[1],c[0]]);
+    const hexes = h3.polyfill([coords],9);
+
+    hexes.forEach(h => {
+
+      const center = h3.h3ToGeo(h);
+      const pt = turf.point([center[1], center[0]]);
+
+      if (turf.booleanPointInPolygon(pt, buffered)) {
+        selectedHexes.add(h);
+        drawHex(h);
+      }
+
+    });
+
   });
 
   updateUI();
@@ -212,7 +242,7 @@ map.on('draw:created', function(e){
     const pts = layer.getLatLngs();
 
     // ✅ FIX: ignore incomplete lines (prevents 2-click close bug)
-    if(pts.length < 3){
+    
       // keep drawing active (do NOT process yet)
       return;
     }
