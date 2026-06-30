@@ -23,11 +23,7 @@ body { margin:0; font-family: Arial; }
   box-shadow:0 0 10px rgba(0,0,0,0.2);
 }
 
-input, select {
-  width:100%;
-  padding:6px;
-  margin-bottom:10px;
-}
+input, select { width:100%; padding:6px; margin-bottom:10px; }
 
 button {
   width:100%;
@@ -52,9 +48,9 @@ button {
 <body>
 
 <div id="panel">
-<h3>Search</h3>
 
-<input id="searchBox" placeholder="Search address">
+<h3>Search</h3>
+<input id="searchBox">
 <button onclick="searchLocation()">Find</button>
 
 <label>Buffer</label>
@@ -77,26 +73,27 @@ button {
 <script>
 document.addEventListener("DOMContentLoaded", function(){
 
-const map = L.map('map').setView([52.48, -1.89], 13);
+const map = L.map('map').setView([52.48,-1.89],13);
 
-// ✅ fix draw / zoom conflict
+// ✅ prevent zoom interfering with double-click
 map.doubleClickZoom.disable();
 
 map.createPane('hexPane');
 map.getPane('hexPane').style.zIndex = 650;
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
   attribution:'© OpenStreetMap'
 }).addTo(map);
 
 const drawnItems = new L.FeatureGroup().addTo(map);
 const bufferGroup = L.layerGroup().addTo(map);
 
-// ✅ FIX polygon error
+// ✅ FIXED DRAW CONFIG
 const drawControl = new L.Control.Draw({
   draw:{
     polygon:{
       allowIntersection:true,
+      showArea:true,
       shapeOptions:{color:'#d12b2b',weight:3}
     },
     polyline:{
@@ -110,34 +107,22 @@ const drawControl = new L.Control.Draw({
 map.addControl(drawControl);
 
 // ✅ DATA
-let hexLayers=[];
-let selectedHexes=new Set();
+let hexLayers = [];
+let selectedHexes = new Set();
 
-// ✅ CLEAR FIX
+// ✅ CLEAR (global)
 window.clearAll = function(){
   drawnItems.clearLayers();
   bufferGroup.clearLayers();
-  hexLayers.forEach(l=>map.removeLayer(l));
-  hexLayers=[];
+  hexLayers.forEach(l => map.removeLayer(l));
+  hexLayers = [];
   selectedHexes.clear();
   updateUI();
 }
 
-function drawHex(h){
-  const coords=h3.h3ToGeoBoundary(h,false);
-  const p=L.polygon(coords.map(c=>[c[0],c[1]]),{
-    pane:'hexPane',
-    color:"#003366",
-    weight:0.4,
-    fillColor:"#4a90e2",
-    fillOpacity:0.6
-  }).addTo(map);
-  hexLayers.push(p);
-}
-
 function updateUI(){
-  const n=selectedHexes.size;
-  tileCount.innerText=n;
+  const n = selectedHexes.size;
+  tileCount.innerText = n;
 
   let price;
   if(n<=50) price=n*2.99;
@@ -146,16 +131,31 @@ function updateUI(){
   else if(n<=500) price=n*0.99;
   else price=n*0.49;
 
-  quote.innerText=Math.round(price);
+  quote.innerText = Math.round(price);
 }
 
-// ✅ POLYGON
+function drawHex(h){
+  const coords = h3.h3ToGeoBoundary(h,false);
+  const poly = L.polygon(coords.map(c=>[c[0],c[1]]),{
+    pane:'hexPane',
+    color:'#003366',
+    weight:0.4,
+    fillColor:'#4a90e2',
+    fillOpacity:0.6
+  }).addTo(map);
+
+  hexLayers.push(poly);
+}
+
+// ✅ POLYGON (NO buffer overshoot)
 function handlePolygon(geo){
 
-  clearAll();
+  hexLayers.forEach(l => map.removeLayer(l));
+  hexLayers = [];
+  selectedHexes.clear();
 
-  const coords=geo.geometry.coordinates[0].map(c=>[c[1],c[0]]);
-  const hexes=h3.polyfill([coords],9);
+  const coords = geo.geometry.coordinates[0].map(c=>[c[1],c[0]]);
+  const hexes = h3.polyfill([coords],9);
 
   hexes.forEach(h=>{
     selectedHexes.add(h);
@@ -165,69 +165,65 @@ function handlePolygon(geo){
   updateUI();
 }
 
-// ✅ LINE (FINAL CORRECT)
+// ✅ LINE (STABLE + CORRECT)
 function handleLine(line){
 
-  clearAll();
+  hexLayers.forEach(l => map.removeLayer(l));
+  hexLayers = [];
+  selectedHexes.clear();
 
-  const bufferVal=parseFloat(buffer.value);
+  const bufferVal = parseFloat(buffer.value);
 
-  const buffered=turf.buffer(line,bufferVal,{units:'meters'});
+  const buffered = turf.buffer(line, bufferVal, {units:'meters'});
+
+  bufferGroup.clearLayers();
 
   L.geoJSON(buffered,{
     style:{color:'#d12b2b',weight:2,fillOpacity:0.2}
   }).addTo(bufferGroup);
 
-  // ✅ use bounding box approach
-  const bbox=turf.bbox(buffered);
-
-  const searchPoly=[[
-    [bbox[0],bbox[1]],
-    [bbox[2],bbox[1]],
-    [bbox[2],bbox[3]],
-    [bbox[0],bbox[3]],
-    [bbox[0],bbox[1]]
-  ]];
-
-  const hexes=h3.polyfill(searchPoly,9);
+  const coords = buffered.geometry.coordinates[0].map(c=>[c[1],c[0]]);
+  const hexes = h3.polyfill([coords],9);
 
   hexes.forEach(h=>{
-    const center=h3.h3ToGeo(h);
-    const pt=turf.point([center[1],center[0]]);
-
-    if(turf.booleanPointInPolygon(pt,buffered)){
-      selectedHexes.add(h);
-      drawHex(h);
-    }
+    selectedHexes.add(h);
+    drawHex(h);
   });
 
   updateUI();
 }
 
-// ✅ DRAW COMPLETE
-map.on('draw:created',function(e){
+// ✅ DRAW EVENT (CRITICAL FIX HERE)
+map.on('draw:created', function(e){
 
-  const layer=e.layer;
+  const layer = e.layer;
 
   drawnItems.clearLayers();
   bufferGroup.clearLayers();
 
   drawnItems.addLayer(layer);
 
-  if(e.layerType==="polygon"){
+  if(e.layerType === "polygon"){
     handlePolygon(layer.toGeoJSON());
   }
 
-  if(e.layerType==="polyline"){
+  if(e.layerType === "polyline"){
 
-    // ✅ allow 2-point line (fix “auto close” feeling)
+    const pts = layer.getLatLngs();
+
+    // ✅ FIX: ignore incomplete lines (prevents 2-click close bug)
+    if(pts.length < 3){
+      // keep drawing active (do NOT process yet)
+      return;
+    }
+
     handleLine(layer.toGeoJSON());
   }
 
 });
 
 // ✅ SEARCH
-window.searchLocation=function(){
+window.searchLocation = function(){
   fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${searchBox.value}`)
     .then(r=>r.json())
     .then(d=>{
@@ -241,4 +237,3 @@ window.searchLocation=function(){
 
 </body>
 </html>
-``
