@@ -104,6 +104,10 @@ button.activeDraw {
   font-weight:600;
 }
 
+#retrieveLinkInput {
+  font-size:12px;
+}
+
 .hidden {
   display:none;
 }
@@ -116,6 +120,7 @@ button.activeDraw {
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
 <script src="https://unpkg.com/h3-js@3.7.2/dist/h3-js.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.2/proj4.js"></script>
 </head>
 
 <body>
@@ -124,7 +129,7 @@ button.activeDraw {
 
   <h3>Search</h3>
 
-  <input id="searchBox" placeholder="Search address">
+  <input id="searchBox" placeholder="Search address or Easting/Northing">
   <button id="findBtn">Find</button>
 
   <label>Buffer for line</label>
@@ -158,6 +163,12 @@ button.activeDraw {
 
     <p>Quote Ref: <strong><span id="quoteRefText">Not created</span></strong></p>
     <p id="quoteStatus"></p>
+
+    <div id="retrieveLinkBox" class="hidden">
+      <label>Retrieve quote link</label>
+      <input id="retrieveLinkInput" readonly>
+      <button id="copyRetrieveLinkBtn" class="secondary">Copy Retrieve Link</button>
+    </div>
 
     <button id="downloadQuoteBtn" class="secondary">Download Quote JSON</button>
   </div>
@@ -194,7 +205,7 @@ button.activeDraw {
     <input id="plannedDate" type="date">
 
     <label>Reason / notes</label>
-    <textarea id="notes" placeholder="Describe the reason for the search, method of works, works duration, depths, etc."></textarea>
+    <textarea id="notes" placeholder="Describe search reason, works method, duration, depths etc."></textarea>
 
     <label>Payment method</label>
     <select id="paymentMethod">
@@ -215,6 +226,11 @@ function initApp(){
 
   const H3_RESOLUTION = 9;
   const EDGE_CANDIDATE_BUFFER_METRES = 500;
+
+  proj4.defs(
+    "EPSG:27700",
+    "+proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +datum=OSGB36 +units=m +no_defs"
+  );
 
   const map = L.map('map').setView([52.48, -1.89], 13);
   map.doubleClickZoom.disable();
@@ -258,6 +274,8 @@ function initApp(){
   const quoteRefText = document.getElementById("quoteRefText");
   const quoteStatus = document.getElementById("quoteStatus");
   const orderSection = document.getElementById("orderSection");
+  const retrieveLinkBox = document.getElementById("retrieveLinkBox");
+  const retrieveLinkInput = document.getElementById("retrieveLinkInput");
 
   const category = document.getElementById("category");
   const workType = document.getElementById("workType");
@@ -409,6 +427,8 @@ function initApp(){
 
     quoteRefText.innerText = "Not created";
     quoteStatus.innerText = "";
+    retrieveLinkInput.value = "";
+    retrieveLinkBox.classList.add("hidden");
     orderSection.classList.add("hidden");
 
     clearHexes();
@@ -451,18 +471,6 @@ function initApp(){
     coords.push(coords[0]);
 
     return `POLYGON((${coords.join(", ")}))`;
-  }
-
-  function polygonsFromGeometry(geometry){
-    if(geometry.type === "Polygon"){
-      return [geometry.coordinates];
-    }
-
-    if(geometry.type === "MultiPolygon"){
-      return geometry.coordinates;
-    }
-
-    return [];
   }
 
   function getCandidateHexes(geo){
@@ -539,6 +547,8 @@ function initApp(){
     currentQuote = null;
     quoteRefText.innerText = "Not created";
     quoteStatus.innerText = "";
+    retrieveLinkInput.value = "";
+    retrieveLinkBox.classList.add("hidden");
     orderSection.classList.add("hidden");
   }
 
@@ -629,6 +639,8 @@ function initApp(){
       currentQuote = null;
       quoteRefText.innerText = "Not created";
       quoteStatus.innerText = "";
+      retrieveLinkInput.value = "";
+      retrieveLinkBox.classList.add("hidden");
       orderSection.classList.add("hidden");
     }
 
@@ -703,6 +715,10 @@ function initApp(){
       quoteTotal: total,
       bufferMeters: lastLineGeo ? parseFloat(bufferSelect.value) : null,
       geometryType: lastLineGeo ? "line-buffer" : "polygon",
+      geometry: selectedGeometry,
+      lineGeometry: lastLineGeo,
+      mapCenter: map.getCenter(),
+      mapZoom: map.getZoom(),
       hexes: Array.from(selectedHexes).sort(),
       tiles: buildTiles(quoteRef)
     };
@@ -712,10 +728,20 @@ function initApp(){
     localStorage.setItem(`quote_${quote.quoteRef}`, JSON.stringify(quote));
   }
 
+  function getRetrieveLink(quoteRef){
+    return `${location.origin}${location.pathname}?quote=${quoteRef}`;
+  }
+
+  function showRetrieveLink(quoteRef){
+    retrieveLinkInput.value = getRetrieveLink(quoteRef);
+    retrieveLinkBox.classList.remove("hidden");
+  }
+
   function showQuote(quote){
     currentQuote = quote;
     quoteRefText.innerText = quote.quoteRef;
     quoteStatus.innerText = `Quote ${quote.status}. ${quote.tileCount} tiles. Total £${quote.quoteTotal}.`;
+    showRetrieveLink(quote.quoteRef);
   }
 
   function saveQuote(){
@@ -728,8 +754,6 @@ function initApp(){
     storeQuote(quote);
     showQuote(quote);
 
-    const retrieveLink = `${location.origin}${location.pathname}?quote=${quote.quoteRef}`;
-
     if(quote.email){
       const subject = encodeURIComponent(`LSBUD Large Site Quote ${quote.quoteRef}`);
       const body = encodeURIComponent(
@@ -737,12 +761,10 @@ function initApp(){
         `Selected Area: ${quote.selectedAreaSqKm} sq km\n` +
         `Tiles: ${quote.tileCount}\n` +
         `Quote Total: £${quote.quoteTotal}\n\n` +
-        `Retrieve quote:\n${retrieveLink}`
+        `Retrieve quote:\n${getRetrieveLink(quote.quoteRef)}`
       );
 
       window.location.href = `mailto:${quote.email}?subject=${subject}&body=${body}`;
-    } else {
-      alert(`Quote saved locally.\nQuote Ref: ${quote.quoteRef}\nRetrieve link:\n${retrieveLink}`);
     }
   }
 
@@ -843,6 +865,35 @@ function initApp(){
     downloadJson(`${payload.quote.quoteRef}-onecall-payload.json`, payload);
   }
 
+  function parseEastingNorthing(input){
+    const cleaned = input
+      .replace(/,/g, " ")
+      .replace(/[ENen]/g, " ")
+      .trim();
+
+    const parts = cleaned
+      .split(/\s+/)
+      .map(Number)
+      .filter(n => !isNaN(n));
+
+    if(parts.length < 2) return null;
+
+    const easting = parts[0];
+    const northing = parts[1];
+
+    if(easting < 0 || easting > 700000) return null;
+    if(northing < 0 || northing > 1300000) return null;
+
+    const lonLat = proj4("EPSG:27700", "EPSG:4326", [easting, northing]);
+
+    return {
+      lat: lonLat[1],
+      lon: lonLat[0],
+      easting: easting,
+      northing: northing
+    };
+  }
+
   function loadQuoteFromUrl(){
     const params = new URLSearchParams(location.search);
     const quoteRef = params.get("quote");
@@ -859,6 +910,56 @@ function initApp(){
     clearAll();
 
     const quote = JSON.parse(stored);
+    currentQuote = quote;
+
+    if(quote.mapCenter && quote.mapZoom){
+      map.setView([quote.mapCenter.lat, quote.mapCenter.lng], quote.mapZoom);
+    }
+
+    if(quote.geometryType === "polygon" && quote.geometry){
+      drawnLayer = L.geoJSON(quote.geometry, {
+        style:{
+          color:'#d12b2b',
+          weight:3,
+          fillColor:'#d12b2b',
+          fillOpacity:0.08
+        }
+      }).addTo(map);
+
+      selectedGeometry = quote.geometry;
+      map.fitBounds(drawnLayer.getBounds());
+    }
+
+    if(quote.geometryType === "line-buffer" && quote.lineGeometry){
+      drawnLayer = L.geoJSON(quote.lineGeometry, {
+        style:{
+          color:'#d12b2b',
+          weight:3
+        }
+      }).addTo(map);
+
+      lastLineGeo = quote.lineGeometry;
+
+      if(quote.bufferMeters){
+        bufferSelect.value = quote.bufferMeters;
+
+        const buffered = turf.buffer(quote.lineGeometry, quote.bufferMeters, {
+          units:'meters'
+        });
+
+        bufferLayer = L.geoJSON(buffered, {
+          style:{
+            color:'#d12b2b',
+            weight:2,
+            fillColor:'#d12b2b',
+            fillOpacity:0.18
+          }
+        }).addTo(map);
+
+        selectedGeometry = buffered;
+        map.fitBounds(bufferLayer.getBounds());
+      }
+    }
 
     quote.hexes.forEach(hex => {
       selectedHexes.add(hex);
@@ -907,9 +1008,22 @@ function initApp(){
   };
 
   document.getElementById("findBtn").onclick = function(){
-    const query = document.getElementById("searchBox").value;
+    const query = document.getElementById("searchBox").value.trim();
 
-    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}`)
+    const en = parseEastingNorthing(query);
+
+    if(en){
+      map.setView([en.lat, en.lon], 15);
+
+      if(searchMarker){
+        map.removeLayer(searchMarker);
+      }
+
+      searchMarker = L.marker([en.lat, en.lon]).addTo(map);
+      return;
+    }
+
+    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`)
       .then(response => response.json())
       .then(data => {
         if(!data.length) return;
@@ -935,6 +1049,24 @@ function initApp(){
     acceptQuote();
   };
 
+  document.getElementById("copyRetrieveLinkBtn").onclick = function(){
+    const link = retrieveLinkInput.value;
+
+    if(!link){
+      return;
+    }
+
+    if(navigator.clipboard){
+      navigator.clipboard.writeText(link).then(() => {
+        quoteStatus.innerText = "Retrieve link copied to clipboard.";
+      });
+    } else {
+      retrieveLinkInput.select();
+      document.execCommand("copy");
+      quoteStatus.innerText = "Retrieve link copied to clipboard.";
+    }
+  };
+
   document.getElementById("downloadQuoteBtn").onclick = function(){
     downloadQuote();
   };
@@ -955,11 +1087,10 @@ function initApp(){
   }, 200);
 
   console.log("LSBUD large site prototype initialised");
-
 }
 
 initApp();
 </script>
 
 </body>
-</html>
+</html> 
