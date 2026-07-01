@@ -115,6 +115,19 @@ button.activeDraw {
 .leaflet-tile-pane {
   filter: grayscale(85%) brightness(96%);
 }
+
+.hex-label {
+  background: rgba(255,255,255,0.9);
+  border: 1px solid #003366;
+  color: #003366;
+  font-size: 11px;
+  font-weight: bold;
+  text-align: center;
+  border-radius: 10px;
+  padding: 2px 4px;
+  min-width: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
 </style>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -238,6 +251,9 @@ function initApp(){
   map.createPane('hexPane');
   map.getPane('hexPane').style.zIndex = 650;
 
+  map.createPane('labelPane');
+  map.getPane('labelPane').style.zIndex = 700;
+
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom:19,
     attribution:'&copy; OpenStreetMap contributors | LSBUD'
@@ -256,6 +272,7 @@ function initApp(){
   let searchMarker = null;
 
   let hexLayers = [];
+  let hexLabelLayers = [];
   let selectedHexes = new Set();
 
   let lastLineGeo = null;
@@ -392,8 +409,12 @@ function initApp(){
 
   function clearHexes(){
     hexLayers.forEach(layer => map.removeLayer(layer));
+    hexLabelLayers.forEach(layer => map.removeLayer(layer));
+
     hexLayers = [];
+    hexLabelLayers = [];
     selectedHexes.clear();
+
     updateUI();
   }
 
@@ -436,7 +457,7 @@ function initApp(){
     updateModeUI();
   }
 
-  function drawHex(hex){
+  function drawHex(hex, tileNumber){
     const boundary = h3.h3ToGeoBoundary(hex, false);
 
     const layer = L.polygon(boundary.map(p => [p[0], p[1]]), {
@@ -448,6 +469,22 @@ function initApp(){
     }).addTo(map);
 
     hexLayers.push(layer);
+
+    const center = h3.h3ToGeo(hex);
+    const labelText = String(tileNumber).padStart(3, "0");
+
+    const label = L.marker([center[0], center[1]], {
+      pane:'labelPane',
+      interactive:false,
+      icon:L.divIcon({
+        className:'hex-label',
+        html:labelText,
+        iconSize:[28,18],
+        iconAnchor:[14,9]
+      })
+    }).addTo(map);
+
+    hexLabelLayers.push(label);
   }
 
   function hexToTurfPolygon(hex){
@@ -505,14 +542,21 @@ function initApp(){
     clearHexes();
 
     const candidates = getCandidateHexes(geo);
+    const intersectingHexes = [];
 
     candidates.forEach(hex => {
       const hexPoly = hexToTurfPolygon(hex);
 
       if(turf.booleanIntersects(hexPoly, geo)){
-        selectedHexes.add(hex);
-        drawHex(hex);
+        intersectingHexes.push(hex);
       }
+    });
+
+    intersectingHexes.sort();
+
+    intersectingHexes.forEach((hex, index) => {
+      selectedHexes.add(hex);
+      drawHex(hex, index + 1);
     });
 
     updateUI();
@@ -688,11 +732,11 @@ function initApp(){
       const padded = String(number).padStart(3, "0");
 
       return {
-        tileNumber: number,
-        tileRef: `${quoteRef}-${padded}`,
-        quoteRef: quoteRef,
-        h3Index: hex,
-        wkt: h3ToWkt(hex)
+        tileNumber:number,
+        tileRef:`${quoteRef}-${padded}`,
+        quoteRef:quoteRef,
+        h3Index:hex,
+        wkt:h3ToWkt(hex)
       };
     });
   }
@@ -704,23 +748,23 @@ function initApp(){
     const total = Math.round(calculatePrice(count));
 
     return {
-      quoteRef: quoteRef,
-      status: status,
-      email: document.getElementById("quoteEmail").value,
-      createdAt: new Date().toISOString(),
-      selectedAreaSqKm: parseFloat(selectedArea.innerText),
-      tileCount: count,
-      priceBand: getPriceBand(count),
-      unitPrice: getUnitPrice(count),
-      quoteTotal: total,
-      bufferMeters: lastLineGeo ? parseFloat(bufferSelect.value) : null,
-      geometryType: lastLineGeo ? "line-buffer" : "polygon",
-      geometry: selectedGeometry,
-      lineGeometry: lastLineGeo,
-      mapCenter: map.getCenter(),
-      mapZoom: map.getZoom(),
-      hexes: Array.from(selectedHexes).sort(),
-      tiles: buildTiles(quoteRef)
+      quoteRef:quoteRef,
+      status:status,
+      email:document.getElementById("quoteEmail").value,
+      createdAt:new Date().toISOString(),
+      selectedAreaSqKm:parseFloat(selectedArea.innerText),
+      tileCount:count,
+      priceBand:getPriceBand(count),
+      unitPrice:getUnitPrice(count),
+      quoteTotal:total,
+      bufferMeters:lastLineGeo ? parseFloat(bufferSelect.value) : null,
+      geometryType:lastLineGeo ? "line-buffer" : "polygon",
+      geometry:selectedGeometry,
+      lineGeometry:lastLineGeo,
+      mapCenter:map.getCenter(),
+      mapZoom:map.getZoom(),
+      hexes:Array.from(selectedHexes).sort(),
+      tiles:buildTiles(quoteRef)
     };
   }
 
@@ -790,25 +834,25 @@ function initApp(){
     }
 
     return {
-      quote: currentQuote,
-      searchDetails: {
-        organisation: document.getElementById("organisation").value,
-        contactName: document.getElementById("contactName").value,
-        contactEmail: document.getElementById("contactEmail").value,
-        contactPhone: document.getElementById("contactPhone").value,
-        projectRef: document.getElementById("projectRef").value,
-        category: document.getElementById("category").value,
-        workType: document.getElementById("workType").value,
-        plannedDate: document.getElementById("plannedDate").value,
-        notes: document.getElementById("notes").value,
-        paymentMethod: document.getElementById("paymentMethod").value
+      quote:currentQuote,
+      searchDetails:{
+        organisation:document.getElementById("organisation").value,
+        contactName:document.getElementById("contactName").value,
+        contactEmail:document.getElementById("contactEmail").value,
+        contactPhone:document.getElementById("contactPhone").value,
+        projectRef:document.getElementById("projectRef").value,
+        category:document.getElementById("category").value,
+        workType:document.getElementById("workType").value,
+        plannedDate:document.getElementById("plannedDate").value,
+        notes:document.getElementById("notes").value,
+        paymentMethod:document.getElementById("paymentMethod").value
       },
-      oneCallExport: currentQuote.tiles.map(tile => ({
-        quoteRef: tile.quoteRef,
-        tileNumber: tile.tileNumber,
-        tileRef: tile.tileRef,
-        h3Index: tile.h3Index,
-        geometryWkt: tile.wkt
+      oneCallExport:currentQuote.tiles.map(tile => ({
+        quoteRef:tile.quoteRef,
+        tileNumber:tile.tileNumber,
+        tileRef:tile.tileRef,
+        h3Index:tile.h3Index,
+        geometryWkt:tile.wkt
       }))
     };
   }
@@ -887,10 +931,10 @@ function initApp(){
     const lonLat = proj4("EPSG:27700", "EPSG:4326", [easting, northing]);
 
     return {
-      lat: lonLat[1],
-      lon: lonLat[0],
-      easting: easting,
-      northing: northing
+      lat:lonLat[1],
+      lon:lonLat[0],
+      easting:easting,
+      northing:northing
     };
   }
 
@@ -961,9 +1005,11 @@ function initApp(){
       }
     }
 
-    quote.hexes.forEach(hex => {
+    const sortedHexes = quote.hexes.slice().sort();
+
+    sortedHexes.forEach((hex, index) => {
       selectedHexes.add(hex);
-      drawHex(hex);
+      drawHex(hex, index + 1);
     });
 
     selectedArea.innerText = quote.selectedAreaSqKm.toFixed(3);
@@ -1093,4 +1139,4 @@ initApp();
 </script>
 
 </body>
-</html> 
+</html>
