@@ -25,14 +25,14 @@
   --hex-fill: #8eb4c7;
 }
 
-body { 
-  margin:0; 
+body {
+  margin:0;
   font-family: Arial, Helvetica, sans-serif;
   color: var(--text-main);
   background:#fff;
 }
 
-#map { 
+#map {
   position:fixed;
   top:0;
   left:0;
@@ -42,7 +42,6 @@ body {
   height:100vh;
 }
 
-/* Floating panel */
 #panel {
   position:absolute;
   top:20px;
@@ -173,13 +172,11 @@ button.saved {
   display:none;
 }
 
-/* Subdued map palette */
 .leaflet-tile-pane {
   filter: grayscale(95%) brightness(104%) contrast(82%) saturate(55%);
   opacity:0.82;
 }
 
-/* Sequential hex labels */
 .hex-label {
   background:rgba(255,255,255,0.86);
   border:1px solid #8aa1b0;
@@ -193,7 +190,6 @@ button.saved {
   box-shadow:0 1px 3px rgba(0,0,0,0.12);
 }
 
-/* Leaflet control softening */
 .leaflet-control-zoom a {
   color:var(--lsbud-navy);
 }
@@ -791,6 +787,84 @@ function initApp(){
     updateModeUI();
   }
 
+  function handleIncomingWKT(wkt){
+    if(!wkt) return;
+
+    clearAll();
+
+    const decoded = decodeURIComponent(wkt).trim();
+    const upper = decoded.toUpperCase();
+
+    if(upper.startsWith("POLYGON")){
+      const inner = decoded
+        .replace(/^POLYGON\s*\(\(/i, "")
+        .replace(/\)\)\s*$/i, "");
+
+      const ringText = inner.split(/\)\s*,\s*\(/)[0];
+
+      const latLngs = ringText.split(",").map(pair => {
+        const parts = pair.trim().split(/\s+/).map(Number);
+        const lng = parts[0];
+        const lat = parts[1];
+        return L.latLng(lat, lng);
+      });
+
+      drawnLayer = L.polygon(latLngs, {
+        color:'#b85a60',
+        weight:2,
+        fillColor:'#b85a60',
+        fillOpacity:0.10
+      }).addTo(map);
+
+      const ring = latLngs.map(p => [p.lng, p.lat]);
+      ring.push(ring[0]);
+
+      const geo = turf.polygon([ring]);
+
+      selectedGeometry = geo;
+      lastLineGeo = null;
+
+      updateSelectedArea(geo);
+      selectIntersectingHexes(geo);
+      map.fitBounds(drawnLayer.getBounds(), { padding:[40,40] });
+    }
+
+    if(upper.startsWith("LINESTRING")){
+      const inner = decoded
+        .replace(/^LINESTRING\s*\(/i, "")
+        .replace(/\)\s*$/i, "");
+
+      const latLngs = inner.split(",").map(pair => {
+        const parts = pair.trim().split(/\s+/).map(Number);
+        const lng = parts[0];
+        const lat = parts[1];
+        return L.latLng(lat, lng);
+      });
+
+      drawnLayer = L.polyline(latLngs, {
+        color:'#b85a60',
+        weight:2
+      }).addTo(map);
+
+      const coords = latLngs.map(p => [p.lng, p.lat]);
+      const line = turf.lineString(coords);
+
+      lastLineGeo = line;
+
+      renderLineSelection(line);
+      map.fitBounds(drawnLayer.getBounds(), { padding:[40,40] });
+    }
+  }
+
+  function initialiseIncomingGeometry(){
+    const params = new URLSearchParams(window.location.search);
+    const incomingWKT = params.get("wkt");
+
+    if(incomingWKT){
+      handleIncomingWKT(incomingWKT);
+    }
+  }
+
   function generateQuoteRef(){
     const year = new Date().getFullYear();
     const timePart = Date.now().toString().slice(-6);
@@ -1229,7 +1303,14 @@ function initApp(){
   };
 
   updateModeUI();
-  loadQuoteFromUrl();
+
+  const params = new URLSearchParams(window.location.search);
+
+  if(params.get("wkt")){
+    initialiseIncomingGeometry();
+  } else {
+    loadQuoteFromUrl();
+  }
 
   setTimeout(function(){
     map.invalidateSize();
